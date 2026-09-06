@@ -59,6 +59,18 @@ Architecture of the render loop, for orientation:
    buffer as GL points.
 4. **Post pass** — desaturation, tone mapping, vignette, film grain, gamma.
 
+**Resize must never touch the particles.** `seed()` runs once; `sizeTargets()`
+runs on resize and reallocates only the accumulation buffers, which are the
+only thing whose size depends on the canvas — the particle textures are
+`SIDE x SIDE` and independent of the window. These were one routine called on
+every resize, and the result was a visible glitch on phones: an iOS toolbar
+sliding in and out changes `innerHeight` by a pixel, which was enough to
+re-randomise all 262144 particles, re-upload 16MB of float textures, and clear
+the accumulation buffer — wiping every trail on screen, repeatedly, mid-session.
+`sizeTargets()` also returns immediately when the pixel dimensions are
+unchanged, and copies the old accumulation into the new buffers so the trails
+survive. Do not merge these two back together.
+
 The gate overlay (`#gate`) runs its own separate WebGL1 context drawing a
 rotating 4-D tesseract projected to 2-D. It is independent of the main sim; the
 `Click me` button creates the audio context (browsers require a gesture) and

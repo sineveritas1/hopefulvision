@@ -369,17 +369,20 @@ let AR=1,W,H; const DPR=Math.min(devicePixelRatio||1,1.75);
 const iP=new Float32Array(N*4), iV=new Float32Array(N*4);
 let posT=[],velT=[],simF=[],pcur=0, acc=[],accF=[],accCur=0;
 
-function build(){
-  W=Math.floor(innerWidth*DPR); H=Math.floor(innerHeight*DPR);
-  cv.width=W;cv.height=H;AR=W/H;
+/* Startup and resize are deliberately separate.
+   Particle state lives in SIDE x SIDE textures whose size has nothing to do
+   with the window, so it is seeded once and a resize never touches it. Only
+   the accumulation buffers have to match the canvas.
+   These were previously one routine run on every resize, which re-randomised
+   all 262144 particles, re-uploaded 16MB of float textures and cleared the
+   trails. A 1px height change was enough to trigger it -- which is exactly what
+   an iOS toolbar sliding in and out does, repeatedly, mid-session. */
+function seed(){
   for(let i=0;i<N;i++){
     const a=Math.random()*6.2831,r=Math.sqrt(Math.random())*1.1;
     iP[i*4]=Math.cos(a)*r*AR; iP[i*4+1]=Math.sin(a)*r;
     iP[i*4+2]=Math.random(); iP[i*4+3]=Math.random();
   }
-  posT.forEach(t=>gl.deleteTexture(t)); velT.forEach(t=>gl.deleteTexture(t));
-  simF.forEach(f=>gl.deleteFramebuffer(f));
-  posT=[];velT=[];simF=[];
   for(let i=0;i<2;i++){
     posT.push(dataTex(SIDE,SIDE,iP));
     velT.push(dataTex(SIDE,SIDE,iV));
@@ -388,14 +391,41 @@ function build(){
     gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,velT[i],0);
     simF.push(f);
   }
-  acc.forEach(t=>gl.deleteTexture(t)); accF.forEach(f=>gl.deleteFramebuffer(f));
-  acc=[];accF=[];
-  for(let i=0;i<2;i++){const [t,f]=colorTex(W,H);acc.push(t);accF.push(f);
-    gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);}
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
 }
-addEventListener('resize',()=>{clearTimeout(window.__r);window.__r=setTimeout(build,220);});
-build();
+
+function sizeTargets(){
+  const nw=Math.floor(innerWidth*DPR), nh=Math.floor(innerHeight*DPR);
+  if(nw===W&&nh===H) return;                 // nothing actually changed
+  const old=acc.length?acc[accCur]:null;
+  W=nw;H=nh; cv.width=W;cv.height=H;AR=W/H;
+
+  const nT=[],nF=[];
+  for(let i=0;i<2;i++){const [t,f]=colorTex(W,H);nT.push(t);nF.push(f);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);}
+
+  // Carry the existing trails into the new buffers, so a toolbar sliding in
+  // and out is invisible instead of wiping the painting. uK=1 makes the fade
+  // shader a straight copy; LINEAR sampling rescales it.
+  if(old){
+    gl.useProgram(pFade); bindQuad(pFade);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,nF[0]);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.viewport(0,0,W,H);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,old);
+    gl.uniform1i(gl.getUniformLocation(pFade,'uSrc'),0);
+    gl.uniform2f(gl.getUniformLocation(pFade,'uRes'),W,H);
+    gl.uniform1f(gl.getUniformLocation(pFade,'uK'),1.0);
+    gl.disable(gl.BLEND);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  }
+
+  acc.forEach(t=>gl.deleteTexture(t)); accF.forEach(f=>gl.deleteFramebuffer(f));
+  acc=nT; accF=nF; accCur=0;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+}
+addEventListener('resize',()=>{clearTimeout(window.__r);window.__r=setTimeout(sizeTargets,220);});
+sizeTargets(); seed();
 
 const ptrs=new Map();
 function raw(e){
