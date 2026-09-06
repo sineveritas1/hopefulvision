@@ -5,9 +5,9 @@ spills where your finger is. Ten fingers, each its own colour.
 
 Live at **[trippingtoy.com](https://trippingtoy.com)**.
 
-One self-contained HTML file — WebGL2 particle simulation, generative ambient
-audio (singing bowls plus three synthesised beds, or silence), no dependencies,
-no build step. Works on desktop and mobile; add it to a
+One self-contained HTML file — WebGL2 particle simulation, and a singing-bowl
+chord struck on every touch, drawn at random from a set with no harsh interval
+in it. No dependencies, no build step. Works on desktop and mobile; add it to a
 phone home screen and it runs fullscreen as a web app.
 
 ## Run it

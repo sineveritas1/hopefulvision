@@ -81,31 +81,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
   border:3px solid #D14A33;padding:15px 46px;cursor:pointer;min-height:52px}
 #gate.gone{display:none}
 
-/* Sound picker. Real radio inputs kept for keyboard and assistive tech; the
-   visible chip is the label, so the hit target is the whole chip (>=44px for
-   a thumb). Selection state is mirrored onto .on in JS rather than :has(),
-   so it renders correctly on older WebKit too. */
-#snd-pick{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;
-  justify-content:center;gap:8px;max-width:340px}
-#snd-pick legend{float:left;width:100%;font-size:11px;letter-spacing:.22em;
-  text-transform:uppercase;color:rgba(188,169,240,.75);margin-bottom:11px}
-#snd-pick label{display:inline-flex;align-items:center;gap:9px;cursor:pointer;
-  font-size:13px;letter-spacing:.06em;color:rgba(237,230,213,.62);
-  border:1px solid rgba(237,230,213,.20);padding:0 13px;min-height:42px;
-  transition:color .2s ease,border-color .2s ease,background .2s ease}
-#snd-pick input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
-#snd-pick i{width:11px;height:11px;flex:0 0 auto;display:block;
-  border:1px solid rgba(237,230,213,.42);
-  transition:background .2s ease,border-color .2s ease,box-shadow .2s ease}
-#snd-pick label:hover{color:rgba(255,248,232,.92);border-color:rgba(237,230,213,.44)}
-#snd-pick label.on{color:#FFF3DC;border-color:rgba(232,56,176,.75);background:rgba(232,56,176,.10)}
-#snd-pick label.on i{background:#E838B0;border-color:#E838B0;box-shadow:0 0 12px rgba(232,56,176,.7)}
-#snd-pick input:focus-visible + i{outline:2px solid #BCA9F0;outline-offset:2px}
 
 @media (max-height:700px){
   #logo{width:min(52vw,196px)}
   #gate h1{font-size:clamp(27px,7.6vw,42px)}
-  #snd-pick label{min-height:38px;font-size:12px}
   #gate button{font-size:20px;padding:13px 38px;min-height:46px}
 }
 </style>
@@ -128,14 +107,6 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
  <div id="gwrap">
   <canvas id="logo" width="560" height="560"></canvas>
   <h1>Are You<br>Tripping?<small>You don't have to be</small></h1>
-  <fieldset id="snd-pick">
-    <legend>Sound</legend>
-    <label><input type="radio" name="sndmode" value="bowls" checked><i></i>Bowls</label>
-    <label><input type="radio" name="sndmode" value="amb1"><i></i>Ambient I</label>
-    <label><input type="radio" name="sndmode" value="amb2"><i></i>Ambient II</label>
-    <label><input type="radio" name="sndmode" value="amb3"><i></i>Ambient III</label>
-    <label><input type="radio" name="sndmode" value="none"><i></i>Silence</label>
-  </fieldset>
   <button id="go">Click me</button>
  </div>
 </div>
@@ -449,7 +420,8 @@ function pdata(e,prev){
            p, cx:e.clientX, cy:e.clientY, t:now,
            s: prev ? prev.s : Math.random() };
 }
-cv.addEventListener('pointerdown',e=>ptrs.set(e.pointerId,pdata(e,null)));
+cv.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,pdata(e,null));
+  Bath.chord(e.clientX/innerWidth, e.clientY/innerHeight);});
 cv.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,pdata(e,ptrs.get(e.pointerId)));});
 ['pointerup','pointercancel','pointerleave','pointerout'].forEach(k=>
   cv.addEventListener(k,e=>ptrs.delete(e.pointerId)));
@@ -836,12 +808,11 @@ void main(){
 
 
 const Bath=(function(){
-  // One fixed output level. There is no in-page volume any more: the device's
-  // own volume is the volume, and the corner bell is purely a mute toggle.
-  const LEVEL=0.5;
+  // One fixed output level. There is no in-page volume: the device's volume is
+  // the volume, and the corner bell is only a mute.
+  const LEVEL=0.5, WET=0.46;
 
-  let ctx,master,comp,verb,wet,nodes=[],timers=[],started=false,muted=false,
-      trim=1,wetLevel=0.42;
+  let ctx,master,comp,verb,wet,started=false,muted=false;
 
   function impulse(sec,decay){
     const n=Math.floor(ctx.sampleRate*sec), b=ctx.createBuffer(2,n,ctx.sampleRate);
@@ -851,173 +822,144 @@ const Bath=(function(){
     }
     return b;
   }
-
-  // Pink noise (Paul Kellet's filter). The tail is crossfaded into the head so
-  // the buffer can loop forever without a click at the seam.
-  function noise(sec){
-    const n=Math.floor(ctx.sampleRate*sec), b=ctx.createBuffer(2,n,ctx.sampleRate);
-    for(let c=0;c<2;c++){
-      const d=b.getChannelData(c); let b0=0,b1=0,b2=0;
-      for(let i=0;i<n;i++){
-        const w=Math.random()*2-1;
-        b0=0.99765*b0+w*0.0990460; b1=0.96300*b1+w*0.2965164; b2=0.57000*b2+w*1.0526913;
-        d[i]=(b0+b1+b2+w*0.1848)*0.22;
-      }
-      const x=Math.min(4096,n>>3);
-      for(let i=0;i<x;i++){ const a=i/x; d[n-x+i]=d[n-x+i]*(1-a)+d[i]*a; }
-    }
-    return b;
-  }
-
-  function osc(type,freq,det){
-    const o=ctx.createOscillator(); o.type=type; o.frequency.value=freq;
-    if(det) o.detune.value=det; return o;
-  }
-  // Everything feeds the dry master and the reverb send in parallel.
   function out(node){ node.connect(master); node.connect(verb); }
-  // A very slow LFO onto any AudioParam — the source of all the drift.
-  function drift(param,rate,depth,t){
-    const l=ctx.createOscillator(), a=ctx.createGain();
-    l.frequency.value=rate; a.gain.value=depth;
-    l.connect(a); a.connect(param); l.start(t); nodes.push(l);
+
+  /* ---------------------------------------------------------------------
+     Harmony.
+
+     Six chords, all diatonic to C and all four notes. Every one is checked
+     tritone-free, which is the whole trick: the tritone is the only interval
+     in a diatonic set that reads as tension, so a set without one cannot
+     produce a harsh chord no matter what order it is played in. That is what
+     makes the randomness safe. Dominant sevenths are deliberately absent —
+     G is voiced sus (G C D A) rather than G7, which would reintroduce B-F.
+
+     Pitch classes as semitones from C.
+  --------------------------------------------------------------------- */
+  const CHORDS={
+    I:  [0,4,7,11],   // Cmaj7
+    ii: [2,5,9,0],    // Dm7
+    iii:[4,7,11,2],   // Em7
+    IV: [5,9,0,4],    // Fmaj7
+    V:  [7,0,2,9],    // Gsus (G C D A)
+    vi: [9,0,4,7]     // Am7
+  };
+
+  // Weighted transitions, so it wanders rather than shuffling. No chord can
+  // follow itself, and every listed motion is a common, resolved-sounding one.
+  const NEXT={
+    I:  [['vi',3],['IV',3],['V',2],['iii',2]],
+    ii: [['V',3],['I',2],['IV',2]],
+    iii:[['vi',3],['IV',3],['ii',1]],
+    IV: [['I',3],['V',3],['vi',2],['ii',1]],
+    V:  [['I',4],['vi',3],['IV',1]],
+    vi: [['IV',3],['ii',2],['I',2],['V',2]]
+  };
+  function pickNext(k){
+    const o=NEXT[k]; let total=0;
+    for(const e of o) total+=e[1];
+    let r=Math.random()*total;
+    for(const e of o){ r-=e[1]; if(r<=0) return e[0]; }
+    return o[0][0];
   }
 
-  /* ---- bowls: the original singing bowls, unchanged in character ---- */
-  const PITCH=[130.81,146.83,196.00,220.00,261.63,293.66,392.00];
-  const PART=[[1,1,11],[2.71,0.40,8],[5.14,0.17,6],[8.62,0.07,4],[12.4,0.03,2.6]];
-  function strike(f,gain){
-    const t=ctx.currentTime;
-    const pan=ctx.createStereoPanner?ctx.createStereoPanner():null;
-    if(pan) pan.pan.value=(Math.random()*2-1)*0.7;
+  // Voice leading. Each note is placed in the octave nearest where the same
+  // voice sat in the previous chord, pulled part-way toward the register the
+  // touch asked for. Without this the chords are correct but lurch between
+  // registers; with it they hand off common tones and move a few semitones.
+  const LO=45, HI=84;
+  let voicing=null;
+  function voice(pcs,center){
+    // Close voicing: the root lands near the requested register and every other
+    // note is stacked at the nearest position above the one below it, so the
+    // chord spans about an octave. Giving each voice a fixed offset instead
+    // strands the top note an octave clear of the rest whenever the touch is
+    // high on the screen (measured: A3 C4 E4 G5, and 8-semitone leaps between
+    // chords). The root is blended toward where the previous root sat, which
+    // is what keeps consecutive chords in the same register.
+    const wantRoot=center-7;
+    const ref=voicing?voicing[0]*0.6+wantRoot*0.4:wantRoot;
+    let n=pcs[0]+12*Math.round((ref-pcs[0])/12);
+    while(n<LO) n+=12; while(n>HI-14) n-=12;
+    const v=[n];
+    for(let i=1;i<pcs.length;i++){
+      let m=pcs[i]+12*Math.round((v[i-1]-pcs[i])/12);
+      while(m<=v[i-1]) m+=12;
+      v.push(m);
+    }
+    return v;
+  }
+  function mtof(m){ return 440*Math.pow(2,(m-69)/12); }
+
+  /* ---------------------------------------------------------------------
+     Timbre: the same struck singing bowl as before — inharmonic partials over
+     a long decay, each doubled and detuned — but tuned to a chord tone rather
+     than played alone. Decays are shorter than the original single-bowl values
+     because four of these ring at once and would otherwise pile into mud.
+  --------------------------------------------------------------------- */
+  const PART=[[1,1,7.0],[2.71,0.40,5.2],[5.14,0.17,3.8],[8.62,0.07,2.4],[12.4,0.03,1.6]];
+
+  function bowl(f,when,gain,pan,parts){
     const bus=ctx.createGain(); bus.gain.value=gain;
     const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2400; lp.Q.value=.4;
     bus.connect(lp);
-    if(pan){ lp.connect(pan); out(pan); } else { out(lp); }
-    PART.forEach(function(P){
-      var ratio=P[0],amp=P[1],dec=P[2];
+    const p=ctx.createStereoPanner?ctx.createStereoPanner():null;
+    if(p){ p.pan.value=pan; lp.connect(p); out(p); } else out(lp);
+    PART.slice(0,parts).forEach(function(P){
+      const ratio=P[0],amp=P[1],dec=P[2];
       [-0.9,0.9].forEach(function(det){
-        const o=osc('sine',f*ratio,det*ratio), g=ctx.createGain();
-        g.gain.setValueAtTime(.0001,t);
-        g.gain.exponentialRampToValueAtTime(amp*0.5,t+.02);
-        g.gain.exponentialRampToValueAtTime(.0001,t+dec);
-        o.connect(g); g.connect(bus); o.start(t); o.stop(t+dec+.2);
+        const o=ctx.createOscillator(), g=ctx.createGain();
+        o.type='sine'; o.frequency.value=f*ratio; o.detune.value=det*ratio;
+        g.gain.setValueAtTime(.0001,when);
+        g.gain.exponentialRampToValueAtTime(amp*0.5,when+.02);
+        g.gain.exponentialRampToValueAtTime(.0001,when+dec);
+        o.connect(g); g.connect(bus); o.start(when); o.stop(when+dec+.2);
       });
     });
   }
-  function bowls(){
-    const t=ctx.currentTime;
-    [65.41,98.00,130.81].forEach(function(f,i){
-      const o=osc(i?'sine':'triangle',f,(i-1)*3.5), g=ctx.createGain(),
-            lp=ctx.createBiquadFilter();
-      lp.type='lowpass'; lp.frequency.value=440-i*90; lp.Q.value=.7;
-      g.gain.setValueAtTime(.0001,t);
-      g.gain.exponentialRampToValueAtTime(0.052/(i+1),t+9);
-      drift(g.gain,0.017+i*0.011,0.026/(i+1),t);
-      drift(lp.frequency,0.008+i*0.005,130,t);
-      o.connect(lp); lp.connect(g); out(g); o.start(t); nodes.push(o);
+
+  // Rate limit and a hard ceiling on overlapping chords. Ten fingers land as
+  // ten pointerdowns in one frame, and each chord is ~28 oscillators that ring
+  // for seconds, so without both of these a drum-roll of taps would bury the
+  // audio thread and turn the harmony to mush.
+  const GAP=550, MAXACTIVE=9;
+  let cur='I', lastAt=-1e9, active=0;
+
+  function chord(nx,ny){
+    if(!ctx||muted) return;
+    const now=performance.now();
+    if(now-lastAt<GAP||active>=MAXACTIVE) return;
+    lastAt=now; active++; setTimeout(function(){active--;},7500);
+
+    // Touch height chooses the register, touch side the stereo placement.
+    // Neither can create dissonance: the pitch classes are already fixed.
+    const y=Math.max(0,Math.min(1,ny));
+    const center=66-y*10;
+    const pan=Math.max(-1,Math.min(1,(nx-0.5)*1.3));
+
+    voicing=voice(CHORDS[cur],center);
+    const t=ctx.currentTime+0.02;
+    voicing.forEach(function(m,i){
+      // A slight upward roll, the way a set of bowls is actually struck. Hit
+      // dead-simultaneously it sounds like a synth pad, not like bowls.
+      const when=t+i*(0.045+Math.random()*0.055);
+      bowl(mtof(m), when, (i===0?0.115:0.085)*(1-i*0.06), pan*(1-i*0.18), i===0?5:3);
     });
-    (function ring(){
-      strike(PITCH[(Math.random()*PITCH.length)|0], 0.16+Math.random()*0.14);
-      if(Math.random()<0.28) timers.push(setTimeout(function(){
-        strike(PITCH[(Math.random()*4)|0],0.10);
-      },900+Math.random()*1400));
-      timers.push(setTimeout(ring, 7000+Math.random()*13000));
-    })();
+    cur=pickNext(cur);
   }
 
-  /* ---- Ambient I: low warm drone, no events, just slow breathing ---- */
-  function amb1(){
-    const t=ctx.currentTime;
-    [55.00,82.41,110.00,164.81,220.00].forEach(function(f,i){
-      const o=osc(i%2?'sine':'triangle',f,(i-2)*4), g=ctx.createGain(),
-            lp=ctx.createBiquadFilter();
-      lp.type='lowpass'; lp.frequency.value=300+i*120; lp.Q.value=.6;
-      g.gain.setValueAtTime(.0001,t);
-      g.gain.exponentialRampToValueAtTime(0.062/(1+i*0.55),t+11);
-      drift(g.gain,0.013+i*0.007,0.022/(1+i*0.5),t);
-      drift(lp.frequency,0.006+i*0.004,110,t);
-      o.connect(lp); lp.connect(g); out(g); o.start(t); nodes.push(o);
-    });
-  }
-
-  /* ---- Ambient II: airy high bed with sparse crystalline bells ---- */
-  function chime(f,gain){
-    const t=ctx.currentTime;
-    const bus=ctx.createGain(); bus.gain.value=gain;
-    const pan=ctx.createStereoPanner?ctx.createStereoPanner():null;
-    if(pan){ pan.pan.value=(Math.random()*2-1)*0.75; bus.connect(pan); out(pan); }
-    else out(bus);
-    [[1,1,5.5],[2.76,0.30,4.2],[5.40,0.12,3.0],[8.93,0.05,2.0]].forEach(function(P){
-      const o=osc('sine',f*P[0],0), g=ctx.createGain();
-      g.gain.setValueAtTime(.0001,t);
-      g.gain.exponentialRampToValueAtTime(P[1]*0.5,t+.01);
-      g.gain.exponentialRampToValueAtTime(.0001,t+P[2]);
-      o.connect(g); g.connect(bus); o.start(t); o.stop(t+P[2]+.2);
-    });
-  }
-  function amb2(){
-    const t=ctx.currentTime;
-    [523.25,659.25,783.99].forEach(function(f,i){
-      const o=osc('sine',f,(i-1)*6), g=ctx.createGain(), bp=ctx.createBiquadFilter();
-      bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=2.2;
-      g.gain.setValueAtTime(.0001,t);
-      g.gain.exponentialRampToValueAtTime(0.022/(i+1),t+13);
-      drift(g.gain,0.021+i*0.013,0.013/(i+1),t);
-      o.connect(bp); bp.connect(g); out(g); o.start(t); nodes.push(o);
-    });
-    const SCALE=[1046.50,1174.66,1396.91,1567.98,1864.66,2093.00];
-    (function ping(){
-      chime(SCALE[(Math.random()*SCALE.length)|0], 0.10+Math.random()*0.07);
-      timers.push(setTimeout(ping, 2600+Math.random()*5200));
-    })();
-  }
-
-  /* ---- Ambient III: filtered noise weather over a low rumble ---- */
-  function amb3(){
-    const t=ctx.currentTime;
-    const src=ctx.createBufferSource(); src.buffer=noise(6); src.loop=true;
-    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=620; bp.Q.value=0.7;
-    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600;
-    const g=ctx.createGain();
-    g.gain.setValueAtTime(.0001,t);
-    g.gain.exponentialRampToValueAtTime(0.11,t+8);
-    drift(bp.frequency,0.021,340,t);
-    drift(g.gain,0.013,0.035,t);
-    src.connect(bp); bp.connect(lp); lp.connect(g); out(g); src.start(t); nodes.push(src);
-    [41.20,61.74].forEach(function(f,i){
-      const o=osc('sine',f,0), og=ctx.createGain(), olp=ctx.createBiquadFilter();
-      olp.type='lowpass'; olp.frequency.value=150;
-      og.gain.setValueAtTime(.0001,t);
-      og.gain.exponentialRampToValueAtTime(0.046/(i+1),t+10);
-      drift(og.gain,0.009+i*0.006,0.018/(i+1),t);
-      o.connect(olp); olp.connect(og); out(og); o.start(t); nodes.push(o);
-    });
-  }
-
-  // Reverb size and wet amount are part of each bed's character, and trim
-  // evens out perceived loudness so switching modes does not change volume.
-  const MODES={
-    bowls:{build:bowls, ir:[4.2,2.4], wet:0.42, trim:1.00},
-    amb1: {build:amb1,  ir:[5.5,2.2], wet:0.46, trim:0.95},
-    amb2: {build:amb2,  ir:[6.5,1.9], wet:0.52, trim:1.05},
-    amb3: {build:amb3,  ir:[3.5,2.6], wet:0.30, trim:1.00}
-  };
-
-  function start(mode){
-    if(started) return;
-    const M=MODES[mode]; if(!M) return;      // 'none' and anything unknown: stay silent
-    started=true; trim=M.trim; wetLevel=M.wet;
+  function start(){
+    if(started) return; started=true;
     try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }
     catch(e){ started=false; return; }
-    if(ctx.state==='suspended' && ctx.resume) ctx.resume();
-    master=ctx.createGain(); master.gain.value=LEVEL*trim;
+    if(ctx.state==='suspended'&&ctx.resume) ctx.resume();
+    master=ctx.createGain(); master.gain.value=LEVEL;
     comp=ctx.createDynamicsCompressor();
     comp.threshold.value=-16; comp.ratio.value=4; comp.attack.value=.02; comp.release.value=.5;
     master.connect(comp); comp.connect(ctx.destination);
-    verb=ctx.createConvolver(); verb.buffer=impulse(M.ir[0],M.ir[1]);
-    wet=ctx.createGain(); wet.gain.value=wetLevel;
+    verb=ctx.createConvolver(); verb.buffer=impulse(5.5,2.2);
+    wet=ctx.createGain(); wet.gain.value=WET;
     verb.connect(wet); wet.connect(comp);
-    M.build();
   }
 
   // The reverb send bypasses master, so muting has to close both or the tail
@@ -1025,13 +967,13 @@ const Bath=(function(){
   function toggle(){
     muted=!muted;
     if(ctx){
-      master.gain.setTargetAtTime(muted?0:LEVEL*trim, ctx.currentTime, 0.25);
-      wet.gain.setTargetAtTime(muted?0:wetLevel, ctx.currentTime, 0.25);
+      master.gain.setTargetAtTime(muted?0:LEVEL, ctx.currentTime, 0.25);
+      wet.gain.setTargetAtTime(muted?0:WET, ctx.currentTime, 0.25);
     }
     return muted;
   }
 
-  return { start:start, toggle:toggle };
+  return { start:start, toggle:toggle, chord:chord };
 })();
 
 const muteBtn=document.getElementById('mute'), sndBox=document.getElementById('snd');
@@ -1044,23 +986,10 @@ muteBtn.onclick=()=>{
   window.__sv=setTimeout(()=>sndBox.classList.remove('live'),2200);
 };
 
-// Mirror :checked onto the label so the chip can be styled without :has().
-const picks=Array.prototype.slice.call(document.querySelectorAll('#snd-pick input'));
-function syncPicks(){ picks.forEach(p=>p.parentNode.classList.toggle('on',p.checked)); }
-picks.forEach(p=>p.addEventListener('change',syncPicks));
-syncPicks();
-
 document.getElementById('go').onclick=()=>{
-  const sel=document.querySelector('#snd-pick input:checked');
-  const mode=sel?sel.value:'bowls';
   document.getElementById('gate').classList.add('gone');
-  if(mode==='none'){
-    // Nothing to mute, so do not offer a mute control.
-    sndBox.hidden=true;
-  }else{
-    Bath.start(mode);
-    sndBox.classList.add('live'); setTimeout(()=>sndBox.classList.remove('live'),4200);
-  }
+  Bath.start();
+  sndBox.classList.add('live'); setTimeout(()=>sndBox.classList.remove('live'),4200);
   running=true; t0=last=performance.now();
   requestAnimationFrame(frame);
   cycle();

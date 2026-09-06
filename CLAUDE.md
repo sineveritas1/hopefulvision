@@ -3,7 +3,8 @@
 A single-page WebGL2 toy: a quarter-million GPU particles advected through a
 curl-noise field, painted with a spectral (wavelength → RGB) palette. Touch or
 mouse input injects vortices — up to ten pointers, each its own hue. There is a
-generative ambient audio bed, and aphorisms fade in and out over the top.
+chord struck from a singing-bowl set on every touch, and aphorisms fade in
+and out over the top.
 
 The whole thing is one hand-written HTML file with no dependencies and no build
 step. Open it in a browser and it runs.
@@ -60,8 +61,8 @@ Architecture of the render loop, for orientation:
 
 The gate overlay (`#gate`) runs its own separate WebGL1 context drawing a
 rotating 4-D tesseract projected to 2-D. It is independent of the main sim; the
-`Click me` button reads the chosen sound mode, starts audio (browsers require a
-gesture) and starts the main loop.
+`Click me` button creates the audio context (browsers require a gesture) and
+starts the main loop.
 
 Two things about the gate are easy to break:
 
@@ -82,27 +83,51 @@ Two things about the gate are easy to break:
 
 ## Sound
 
-Five choices on the gate, radio buttons, `Bowls` default: the original singing
-bowls, three ambient beds, and `Silence`. The mode is picked once before entry
-and fixed for the session, so nothing needs to tear a graph down and rebuild it.
+The page is silent until touched. Every touch on the field strikes a chord, and
+each one moves the progression along. There is no ambient bed and no mode
+selection — an earlier build offered four beds behind radio buttons on the gate;
+that is gone.
 
-Every bed is **synthesised in Web Audio — there are no audio files, and adding
-some would be a real regression.** Responses are served `no-store` (see
-Caching), so any bundled loop would re-download in full on every single visit;
-recordings also loop audibly, carry licence and attribution obligations, and
-would be the project's first binary dependency. Oscillators cost nothing, never
-repeat, and keep the site one self-contained file.
+**Why the randomness is safe.** Six chords, all diatonic to C, all four notes,
+and every one checked tritone-free. The tritone is the only interval in a
+diatonic set that reads as tension, so a set without one cannot produce a harsh
+chord in any order — which is what lets the next chord be chosen at random.
+This is why `V` is voiced sus (G C D A) rather than G7: the dominant seventh
+would put B against F and reintroduce exactly the interval the set excludes.
+**Adding a chord means checking it for a tritone first**, or the guarantee is
+gone.
 
-`Bath` owns all of it. `MODES` maps a mode name to a builder plus its reverb
-size, wet amount, and a loudness `trim` so switching does not change perceived
-volume. To add a bed, write a builder and add one `MODES` entry — `out(node)`
-connects to the dry master and the reverb send, and `drift(param,rate,depth,t)`
-attaches the very slow LFO that everything here uses to breathe.
+`NEXT` holds weighted transitions so it wanders like a progression rather than
+shuffling; no chord follows itself. The first touch is always the tonic.
 
-Output level is fixed at `LEVEL`. There is no in-page volume: the device's
-volume is the volume, and the corner bell is only a mute. Mute has to close
-**both** `master` and `wet` — the reverb send bypasses master, so closing one
-leaves the tail ringing.
+**Voicing.** `voice()` builds a close voicing — root near the requested
+register, every other note stacked at the nearest position above the one below
+— giving a span of about an octave. Do not replace this with a fixed offset per
+voice: that strands the top note an octave clear of the rest whenever the touch
+is high on the screen (measured: `A3 C4 E4 G5`, with 8-semitone leaps between
+chords). The root is blended toward where the previous root sat, which keeps
+consecutive chords in the same register; nearby taps move voices about 5
+semitones.
+
+Touch height picks the register and touch side the stereo placement. Neither
+can create dissonance, because the pitch classes are already fixed by the
+progression.
+
+**Timbre** is the original struck singing bowl — inharmonic partials over a
+long decay, each doubled and detuned — tuned to a chord tone instead of played
+alone. Decays are shorter than the single-bowl values because four ring at
+once. The notes are rolled upward a few tens of milliseconds apart; struck dead
+simultaneously it stops sounding like bowls and starts sounding like a pad.
+
+**The rate limit is load-bearing.** A chord is ~28 oscillators ringing for
+seconds, and ten fingers land as ten `pointerdown` events in one frame. `GAP`
+and `MAXACTIVE` are what stop a drum-roll of taps from burying the audio thread
+and turning the harmony to mush. Muting returns before scheduling anything, so
+a muted page costs nothing.
+
+Output is fixed at `LEVEL`; the device's volume is the volume and the corner
+bell is only a mute. Mute must close **both** `master` and `wet` — the reverb
+send bypasses master, so closing one leaves the tail ringing.
 
 ## Local development
 
