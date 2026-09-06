@@ -14,9 +14,9 @@ step. Open it in a browser and it runs.
 public/            <- the ONLY directory that gets served
   index.html         the entire site: markup, CSS, GLSL, JS, audio
   _headers           Cloudflare Pages response headers
-  _redirects         www -> apex canonical redirect
   404.html           not-found page, same palette
-functions/         <- serverless API, optional, currently one example
+functions/         <- serverless API and request middleware
+  _middleware.js     redirects www -> apex on every request
   api/health.js      answers GET /api/health
 wrangler.toml      <- project name, output dir, resource bindings
 package.json       <- wrangler only; the site itself has no dependencies
