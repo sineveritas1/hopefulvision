@@ -71,6 +71,25 @@ the accumulation buffer — wiping every trail on screen, repeatedly, mid-sessio
 unchanged, and copies the old accumulation into the new buffers so the trails
 survive. Do not merge these two back together.
 
+**A lost GPU context must be handled, and is.** `webglcontextlost` calls
+`preventDefault()` — without it the browser never even attempts restoration and
+the canvas stays blank forever — and `webglcontextrestored` reloads, because
+every program, buffer and texture died with the context and reusing the old
+handles would silently draw nothing. If the GPU *process* is what died, the
+browser may then refuse a webgl2 context entirely on the next load; the failure
+message says so and says to restart the browser, because reloading genuinely
+cannot fix that state. The old message, "This needs WebGL2.", was a dead end
+that misdescribed the usual cause.
+
+`q` is the adaptive guard against provoking that in the first place. Particle
+sprite size grows with "heat", and every pointer injects heat, so ten fingers
+held down inflate a large fraction of the 262144 sprites at once and fill rate
+climbs steeply; a phone GPU that misses its driver watchdog deadline has its
+context killed. `q` stays at 1 and changes nothing on hardware that keeps up,
+backing off only after ~45 sustained slow frames and recovering as soon as they
+do. Do not remove it to "restore quality" — on a device that never drops frames
+it is already a no-op.
+
 The gate overlay (`#gate`) runs its own separate WebGL1 context drawing a
 rotating 4-D tesseract projected to 2-D. It is independent of the main sim; the
 `Click me` button creates the audio context (browsers require a gesture) and

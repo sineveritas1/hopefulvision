@@ -113,8 +113,32 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 
 <script>
 const cv=document.getElementById('c');
-const gl=cv.getContext('webgl2',{alpha:false,antialias:false,preserveDrawingBuffer:false});
-if(!gl){document.getElementById('gate').innerHTML='<p style="font-family:monospace;color:#EDE6D5">This needs WebGL2.</p>';}
+const GLOPT={alpha:false,antialias:false,preserveDrawingBuffer:false};
+// Ask for the discrete GPU first, then accept whatever is going. A browser that
+// has just killed its GPU process refuses the first form but sometimes allows
+// the second.
+const gl=cv.getContext('webgl2',Object.assign({powerPreference:'high-performance'},GLOPT))
+       ||cv.getContext('webgl2',GLOPT);
+if(!gl){
+  // The old copy here just said "This needs WebGL2." — a dead end that is
+  // actively misleading in the common case, which is not an old browser but a
+  // browser that killed its own GPU process and will not restart it for this
+  // tab. Reloading cannot fix that; only restarting the browser can.
+  document.getElementById('gate').innerHTML=
+    '<div style="font-family:\'Courier Prime\',monospace;color:#EDE6D5;max-width:24em;'
+   +'line-height:1.6;text-align:center;padding:24px">'
+   +'<p style="font-size:17px;margin-bottom:16px">The graphics could not start.</p>'
+   +'<p style="font-size:13px;opacity:.72;margin-bottom:12px">If this was working a moment ago, '
+   +'the browser shut its GPU down and will not bring it back for this tab. '
+   +'<b>Reloading will not help — fully quit the browser and reopen it.</b></p>'
+   +'<p style="font-size:13px;opacity:.72;margin-bottom:24px">Otherwise this device or browser '
+   +'has no WebGL2.</p>'
+   +'<button id="retry" style="font-family:\'Saira Condensed\',sans-serif;font-weight:900;'
+   +'font-size:19px;letter-spacing:.16em;text-transform:uppercase;background:#9E2A1A;color:#FFF3DC;'
+   +'border:3px solid #D14A33;padding:13px 34px;cursor:pointer">Try again</button></div>';
+  const rb=document.getElementById('retry');
+  if(rb) rb.onclick=function(){ location.reload(); };
+}
 
 const SIDE = Math.min(innerWidth,innerHeight) < 500 ? 384 : 512;
 const N = SIDE*SIDE;
@@ -572,11 +596,39 @@ const uF=U(pFade,['uSrc','uRes','uK']);
 const uO=U(pPost,['uSrc','uRes','uT']);
 
 let t0=performance.now(),last=t0,running=false;
+
+/* A lost context is the difference between a blip and a dead page.
+   Without preventDefault() the browser never even attempts to restore it, so
+   the canvas stays blank until a reload — and if the GPU process is what died,
+   the reload comes back with no webgl2 at all and the message above. */
+cv.addEventListener('webglcontextlost',function(e){
+  e.preventDefault();
+  running=false;
+  const g=document.getElementById('gtext');
+  if(g){ g.classList.remove('on'); g.textContent='one moment'; requestAnimationFrame(function(){g.classList.add('on');}); }
+},false);
+cv.addEventListener('webglcontextrestored',function(){
+  // Every program, buffer and texture died with the context. Reloading rebuilds
+  // them correctly; reusing the old handles would draw nothing.
+  location.reload();
+},false);
+
+/* Adaptive guard. Particle sprites grow with "heat", and heat is injected by
+   every pointer, so ten fingers held down inflate a large fraction of the
+   262144 sprites at once and the fill rate climbs steeply. A phone GPU that
+   misses its watchdog deadline gets its context killed by the driver, which is
+   the crash this is here to avoid.
+   q stays at 1 and nothing changes on hardware that keeps up; it only backs off
+   after ~45 sustained slow frames, and creeps back up as soon as they recover. */
+let slowN=0, q=1;
 const MRT=[gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1];
 
 function frame(now){
   if(!running) return;
-  const t=(now-t0)/1000, dt=Math.min(0.05,(now-last)/1000); last=now;
+  const t=(now-t0)/1000, dt=Math.min(0.05,(now-last)/1000), ms=now-last; last=now;
+  if(ms>34) slowN=Math.min(90,slowN+1); else slowN=Math.max(0,slowN-1);
+  if(slowN>=45&&q>0.5){ q=Math.max(0.5,q-0.06); slowN=0; }
+  else if(slowN===0&&q<1) q=Math.min(1,q+0.0015);
 
   const arr=new Float32Array(30), sds=new Float32Array(10); let n=0,mx=0;
   ptrs.forEach(v=>{ if(n<10){arr[n*3]=v.x;arr[n*3+1]=v.y;arr[n*3+2]=v.p;sds[n]=v.s;n++;mx=Math.max(mx,v.p);} });
@@ -612,7 +664,7 @@ function frame(now){
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,velT[pcur]);
   gl.uniform1i(uP.uPos,0); gl.uniform1i(uP.uVel,1);
   gl.uniform1f(uP.uSide,SIDE); gl.uniform1f(uP.uAspect,AR);
-  gl.uniform1f(uP.uT,t); gl.uniform1f(uP.uPx,2.1*DPR);
+  gl.uniform1f(uP.uT,t); gl.uniform1f(uP.uPx,2.1*DPR*q);
   gl.drawArrays(gl.POINTS,0,N);
 
   if(n>0){
