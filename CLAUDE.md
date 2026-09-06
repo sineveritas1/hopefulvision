@@ -87,6 +87,29 @@ There is no deploy script to run and no secret to hold. If a deploy needs to be
 inspected, it is in the Cloudflare dashboard under Workers & Pages →
 trippingtoy → Deployments.
 
+## Caching
+
+Nothing this site serves is cacheable by a browser. `public/_headers` sets
+`no-store` (plus the older no-cache/Pragma/Expires spellings) on `/*`, and
+`functions/api/health.js` repeats it in code because `_headers` governs static
+assets only — Function responses set their own headers and would otherwise be
+cacheable.
+
+This is deliberate and should not be "optimised" away. The site is one
+unversioned file with no hashed asset names, so a cached copy pins a visitor to
+an entire old build; a push must reach everyone on their next load, new visitor
+or returning. The cost is one round trip per visit, served from Cloudflare's
+edge (which is purged on every deploy), not from a cold origin.
+
+If versioned assets are ever added — a hashed bundle, an image under a content
+addressed name — those *should* get a long `max-age`, added as their own
+`_headers` block. The blanket rule exists because today there is nothing whose
+name changes when its content does.
+
+One dashboard setting can silently override all of this: Cloudflare's Caching
+-> Configuration -> Browser Cache TTL. It must stay on "Respect Existing
+Headers". Anything else replaces the policy above with a fixed TTL.
+
 ## Growing the backend
 
 The API layer is already wired — `functions/api/health.js` is a working

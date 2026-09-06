@@ -19,6 +19,8 @@
  * single method, or onRequest to handle all of them.
  */
 export function onRequestGet({ env }) {
+  // Explicit: _headers covers static assets, not Function responses, so the
+  // no-store policy has to be repeated here or this endpoint would be cacheable.
   return Response.json({
     ok: true,
     time: new Date().toISOString(),
@@ -29,5 +31,5 @@ export function onRequestGet({ env }) {
       media: Boolean(env.MEDIA),
       cache: Boolean(env.CACHE),
     },
-  });
+  }, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' } });
 }

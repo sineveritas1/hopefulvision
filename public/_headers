@@ -1,16 +1,25 @@
 # Cloudflare Pages response headers.
-# Syntax: a path pattern, then indented "Header: value" lines under it.
+# Syntax: a path pattern at column 0, then indented "Header: value" lines.
+# A blank line ends a block, so keep comments outside the blocks.
 
+# Cache policy: nothing here is ever reused from a browser's store.
+#
+# This site is a single unversioned file. There are no hashed asset names, so
+# there is no way for a stale copy to be "partially" old — a cached index.html
+# pins a visitor to an entire old version of the site, and there is nothing
+# else on the page that benefits from being cached.
+#
+# no-store is what actually forbids reuse; no-cache/must-revalidate/max-age=0
+# repeat the intent for implementations that handle one but not another, and
+# Pragma/Expires cover ancient intermediary proxies.
+#
+# The cost is one round trip per visit (~11 KB gzipped). It is NOT a cold
+# origin fetch: Cloudflare's edge still serves it, and the edge is purged on
+# every deploy, so visitors always get the current build at edge speed.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
-
-# The page is one self-contained file, so never let a browser serve a stale
-# copy of it — a cached index.html would pin someone to an old version of the
-# whole site. Cloudflare's edge cache is purged on every deploy regardless.
-/
-  Cache-Control: public, max-age=0, must-revalidate
-
-/index.html
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Pragma: no-cache
+  Expires: 0
