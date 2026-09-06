@@ -1,26 +1,44 @@
 /**
  * Canonical-host redirect.
  *
- * Both trippingtoy.com and www.trippingtoy.com are attached to this Pages
- * project, so without this the identical site answers on two hostnames.
+ * Several hostnames are attached to this Pages project — trippingtoy.com,
+ * trippingtoys.com, and the www form of each — and they all serve identical
+ * content. Left alone that splits search ranking signals across addresses and
+ * gives the site no single canonical home.
  *
- * This lives in a Function rather than in public/_redirects because Pages
- * matches _redirects rules on the PATH only — a hostname in the `from` field
- * is ignored, and the file applies to every hostname serving the project, so
- * it cannot tell the two apart. A root _middleware.js sees the real Host.
+ * Rather than one rule per domain, anything that is not the canonical host is
+ * sent there. Adding another domain later needs no change here.
  *
- * The tradeoff is that this runs on every request, static assets included.
- * A Cloudflare Redirect Rule (dashboard: Rules -> Redirect Rules) would do the
+ * This lives in a Function rather than public/_redirects because Pages matches
+ * _redirects rules on the PATH only — a hostname in the `from` field is
+ * ignored, and the file applies to every hostname serving the project, so it
+ * cannot tell them apart. A root _middleware.js sees the real Host.
+ *
+ * The tradeoff is that this runs on every request, static assets included. A
+ * Cloudflare Redirect Rule (dashboard: Rules -> Redirect Rules) would do the
  * same job at the edge without invoking a Function; if one is ever added, this
  * file becomes redundant and should be deleted.
  */
+const CANONICAL = 'trippingtoy.com';
+
 export function onRequest({ request, next }) {
   const url = new URL(request.url);
+  const host = url.hostname;
 
-  // Strip a leading "www." from any host, so this keeps working if the domain
-  // changes and does not need a second rule for preview hostnames.
-  if (url.hostname.startsWith('www.')) {
-    url.hostname = url.hostname.slice(4);
+  // Preview deployments (<hash>.<project>.pages.dev) and local development must
+  // keep their own hostname. Redirecting them to production would send every PR
+  // preview to the live site and make it impossible to test a change.
+  const canonical =
+    host === CANONICAL ||
+    host.endsWith('.pages.dev') ||
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.endsWith('.local');
+
+  if (!canonical) {
+    url.hostname = CANONICAL;
+    url.protocol = 'https:';
+    url.port = '';
     return Response.redirect(url.toString(), 301);
   }
 

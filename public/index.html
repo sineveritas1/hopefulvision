@@ -38,18 +38,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;overscroll-beha
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .hud b{color:rgba(255,240,200,.72);font-weight:700}
 #snd{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:6;
-  display:flex;align-items:center;gap:10px;opacity:.34;transition:opacity .4s ease}
-#snd:hover,#snd.live{opacity:.8}
-#mute{font-family:"Courier Prime",monospace;font-size:15px;line-height:1;background:transparent;
-  color:rgba(244,236,218,.9);border:1px solid rgba(244,236,218,.4);width:34px;height:34px;
-  padding:0;cursor:pointer;border-radius:0}
-#mute.off{color:rgba(244,236,218,.34);border-color:rgba(244,236,218,.18)}
-#vol{-webkit-appearance:none;appearance:none;width:88px;height:26px;background:transparent;cursor:pointer}
-#vol::-webkit-slider-runnable-track{height:2px;background:rgba(244,236,218,.34)}
-#vol::-moz-range-track{height:2px;background:rgba(244,236,218,.34)}
-#vol::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-5px;
-  background:rgba(255,238,205,.92);border:0;border-radius:0}
-#vol::-moz-range-thumb{width:12px;height:12px;background:rgba(255,238,205,.92);border:0;border-radius:0}
+  opacity:.62;transition:opacity .35s ease}
+#snd:hover,#snd.live{opacity:1}
+#mute{background:transparent;border:1px solid rgba(244,236,218,.42);
+  width:44px;height:44px;padding:0;cursor:pointer;border-radius:0;
+  display:flex;align-items:center;justify-content:center;color:rgba(244,236,218,.92)}
+#mute svg{width:22px;height:22px;display:block}
+#mute .slash{opacity:0;transition:opacity .18s ease}
+#mute.off{color:rgba(244,236,218,.52);border-color:rgba(244,236,218,.22)}
+#mute.off .slash{opacity:1}
 #glyph{position:fixed;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;
   pointer-events:none;padding:9vw;text-align:center}
 #glyph span{font-family:"Courier Prime",monospace;font-weight:700;font-size:clamp(18px,5.2vw,29px);line-height:1.5;max-width:15em;
@@ -59,31 +56,88 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
   transition:opacity 5s ease,transform 10s ease;
   will-change:opacity,transform;backface-visibility:hidden}
 #glyph span.on{opacity:1;transform:translateY(0) scale(1)}
-#gate{position:fixed;inset:0;z-index:20;background:#0b0a08;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;padding:30px;text-align:center;
-  font-family:"Courier Prime",monospace;color:#EDE6D5;gap:30px;overflow-y:auto}
-#gate h1{font-family:"Saira Condensed",sans-serif;font-weight:900;font-size:clamp(40px,12.5vw,74px);line-height:.86;text-transform:uppercase}
-#gate h1 small{display:block;font-size:.30em;letter-spacing:.20em;color:#BCA9F0;margin-top:14px}
-#logo{width:min(58vw,232px);height:auto;aspect-ratio:1;display:block;margin:0 auto 62px;
-  touch-action:none;cursor:grab;
-  filter:drop-shadow(0 0 38px rgba(168,150,224,.34))}
-#gate h1{margin-top:0;margin-bottom:14px}
-#gate button{font-family:"Saira Condensed",sans-serif;font-weight:900;font-size:25px;letter-spacing:.16em;
-  text-transform:uppercase;background:#9E2A1A;color:#FFF3DC;border:3px solid #D14A33;padding:18px 52px;cursor:pointer}
+/* The gate scrolls if it must, but #gwrap carries margin:auto so that a tall
+   stack stays centred without the top being clipped, which is what happens to
+   an overflowing flex child under justify-content:center. */
+#gate{position:fixed;inset:0;z-index:20;background:#0b0a08;display:flex;
+  align-items:center;justify-content:center;overflow-y:auto;
+  padding:calc(18px + env(safe-area-inset-top)) 20px calc(18px + env(safe-area-inset-bottom));
+  text-align:center;font-family:"Courier Prime",monospace;color:#EDE6D5}
+#gwrap{display:flex;flex-direction:column;align-items:center;width:100%;margin:auto;
+  gap:clamp(13px,2.6vh,24px)}
+#gate h1{font-family:"Saira Condensed",sans-serif;font-weight:900;
+  font-size:clamp(32px,10.2vw,64px);line-height:.86;text-transform:uppercase;margin:0}
+#gate h1 small{display:block;font-size:.30em;letter-spacing:.20em;color:#BCA9F0;margin-top:12px}
+/* The global canvas rule above pins every canvas to position:fixed;inset:0 for
+   the fullscreen sim. The logo must opt out of that or it leaves the flex flow
+   and floats at the top of the viewport, overlapping the title — which is also
+   why its old margin-bottom did nothing. In flow, growing it genuinely pushes
+   the rest of the stack down. */
+#logo{position:static;width:min(76vw,300px);height:auto;aspect-ratio:1;display:block;
+  flex:0 0 auto;margin:0 auto clamp(2px,1.2vh,14px);touch-action:none;cursor:grab;
+  filter:drop-shadow(0 0 44px rgba(168,150,224,.36))}
+#gate button{font-family:"Saira Condensed",sans-serif;font-weight:900;font-size:23px;
+  letter-spacing:.16em;text-transform:uppercase;background:#9E2A1A;color:#FFF3DC;
+  border:3px solid #D14A33;padding:15px 46px;cursor:pointer;min-height:52px}
 #gate.gone{display:none}
+
+/* Sound picker. Real radio inputs kept for keyboard and assistive tech; the
+   visible chip is the label, so the hit target is the whole chip (>=44px for
+   a thumb). Selection state is mirrored onto .on in JS rather than :has(),
+   so it renders correctly on older WebKit too. */
+#snd-pick{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;
+  justify-content:center;gap:8px;max-width:340px}
+#snd-pick legend{float:left;width:100%;font-size:11px;letter-spacing:.22em;
+  text-transform:uppercase;color:rgba(188,169,240,.75);margin-bottom:11px}
+#snd-pick label{display:inline-flex;align-items:center;gap:9px;cursor:pointer;
+  font-size:13px;letter-spacing:.06em;color:rgba(237,230,213,.62);
+  border:1px solid rgba(237,230,213,.20);padding:0 13px;min-height:42px;
+  transition:color .2s ease,border-color .2s ease,background .2s ease}
+#snd-pick input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+#snd-pick i{width:11px;height:11px;flex:0 0 auto;display:block;
+  border:1px solid rgba(237,230,213,.42);
+  transition:background .2s ease,border-color .2s ease,box-shadow .2s ease}
+#snd-pick label:hover{color:rgba(255,248,232,.92);border-color:rgba(237,230,213,.44)}
+#snd-pick label.on{color:#FFF3DC;border-color:rgba(232,56,176,.75);background:rgba(232,56,176,.10)}
+#snd-pick label.on i{background:#E838B0;border-color:#E838B0;box-shadow:0 0 12px rgba(232,56,176,.7)}
+#snd-pick input:focus-visible + i{outline:2px solid #BCA9F0;outline-offset:2px}
+
+@media (max-height:700px){
+  #logo{width:min(52vw,196px)}
+  #gate h1{font-size:clamp(27px,7.6vw,42px)}
+  #snd-pick label{min-height:38px;font-size:12px}
+  #gate button{font-size:20px;padding:13px 38px;min-height:46px}
+}
 </style>
 </head>
 <body style="background:#0b0a08">
 <canvas id="c"></canvas>
 <div id="glyph"><span id="gtext"></span></div>
 <div id="snd">
-  <button id="mute" aria-label="Mute">&#9673;</button>
-  <input id="vol" type="range" min="0" max="100" value="55" aria-label="Volume">
+  <button id="mute" aria-label="Mute" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3.1v2"/>
+      <path d="M12 5.1a5.4 5.4 0 0 1 5.4 5.4c0 3.6.9 5.2 1.9 6.2H4.7c1-1 1.9-2.6 1.9-6.2A5.4 5.4 0 0 1 12 5.1Z"/>
+      <path d="M9.9 19.8a2.3 2.3 0 0 0 4.2 0"/>
+      <path class="slash" d="M4.4 4.4 19.6 19.6"/>
+    </svg>
+  </button>
 </div>
 <div id="gate">
+ <div id="gwrap">
   <canvas id="logo" width="560" height="560"></canvas>
   <h1>Are You<br>Tripping?<small>You don't have to be</small></h1>
+  <fieldset id="snd-pick">
+    <legend>Sound</legend>
+    <label><input type="radio" name="sndmode" value="bowls" checked><i></i>Bowls</label>
+    <label><input type="radio" name="sndmode" value="amb1"><i></i>Ambient I</label>
+    <label><input type="radio" name="sndmode" value="amb2"><i></i>Ambient II</label>
+    <label><input type="radio" name="sndmode" value="amb3"><i></i>Ambient III</label>
+    <label><input type="radio" name="sndmode" value="none"><i></i>Silence</label>
+  </fieldset>
   <button id="go">Click me</button>
+ </div>
 </div>
 
 <script>
@@ -708,22 +762,67 @@ void main(){
     }
   }
 
-  let px=0.5,py=0.5,on=0,heat=0,held=false;
+  // px/py follow tx/ty rather than snapping to the pointer, so the deformation
+  // trails the finger like a fluid instead of teleporting with it.
+  let px=0.5,py=0.5,tx=0.5,ty=0.5,on=0,heat=0,held=false,hoverUntil=0;
   function at(e){
-    const rc=lc.getBoundingClientRect();
-    px=(e.clientX-rc.left)/rc.width;
-    py=1.0-(e.clientY-rc.top)/rc.height;
+    const rc=lc.getBoundingClientRect(); if(!rc.width) return;
+    tx=(e.clientX-rc.left)/rc.width;
+    ty=1.0-(e.clientY-rc.top)/rc.height;
   }
-  lc.addEventListener('pointerdown',e=>{held=true;at(e);lc.setPointerCapture(e.pointerId);});
-  lc.addEventListener('pointermove',e=>{at(e); if(!held) on=Math.max(on,0.30);});
-  ['pointerup','pointercancel','pointerleave'].forEach(k=>lc.addEventListener(k,()=>held=false));
+  lc.addEventListener('pointerdown',e=>{
+    held=true; at(e);
+    try{ lc.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  // Hover used to shove `on` up with Math.max every move, which fought the
+  // easing and jittered. A decaying deadline lets it ease both ways instead.
+  lc.addEventListener('pointermove',e=>{ at(e); if(!held) hoverUntil=performance.now()+420; });
+  ['pointerup','pointercancel','lostpointercapture'].forEach(k=>
+    lc.addEventListener(k,()=>held=false));
 
-  const t0=performance.now();
+  // Match the backing store to the element's real pixel size. The logo is much
+  // larger now, and a fixed 560px canvas upscaled on a 3x phone screen is soft.
+  function sizeLogo(){
+    const r=lc.getBoundingClientRect(); if(!r.width) return;
+    const px2=Math.max(1,Math.round(r.width*Math.min(devicePixelRatio||1,2.5)));
+    if(lc.width!==px2){ lc.width=px2; lc.height=px2; }
+  }
+  sizeLogo();
+  addEventListener('resize',()=>{clearTimeout(window.__lr);window.__lr=setTimeout(sizeLogo,180);});
+  // The gate is laid out with a webfont; re-measure once it lands.
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(sizeLogo).catch(()=>{});
+  setTimeout(sizeLogo,600); setTimeout(sizeLogo,2000);
+
+  // Rotation is INTEGRATED as a phase, not derived from absolute time.
+  //
+  // The old form was project(t*(1.0+0.55*on)) — it scaled elapsed time by the
+  // interaction amount, so the angle depended on a number that grows all
+  // session. Easing `on` from 0 to 1 at t=100s swept the argument from 100 to
+  // 155, i.e. ~17 radians of extra rotation dumped into half a second. That is
+  // the spin-out: it got worse the longer the page had been open, which is why
+  // it seemed to happen only sometimes.
+  //
+  // Integrating means touch changes the RATE and never the accumulated angle,
+  // so it can only ever speed up smoothly. dt is clamped for the same reason:
+  // a backgrounded tab must not bank up seconds of rotation and spend them in
+  // one frame on return.
+  const T0=performance.now();
+  let phase=0,last=T0;
   (function tick(now){
-    const t=(now-t0)/1000;
-    on  += ((held?1:0)-on)*0.16;
-    heat+= ((held?1:0)-heat)*0.045;
-    project(t*(1.0+0.55*on));
+    const dt=Math.min(0.05,(now-last)/1000); last=now;
+    const t=(now-T0)/1000;
+
+    // Frame-rate independent easing, matching the main sim's 1-exp(-dt*k) idiom,
+    // so a 120Hz iPhone converges at the same speed as a 60Hz display.
+    const target = held ? 1 : (now<hoverUntil ? 0.30 : 0);
+    on   += (target-on)       * (1-Math.exp(-dt*9));
+    heat += ((held?1:0)-heat) * (1-Math.exp(-dt*2.4));
+    px   += (tx-px)           * (1-Math.exp(-dt*13));
+    py   += (ty-py)           * (1-Math.exp(-dt*13));
+
+    phase += dt*(1.0+0.55*on);
+    project(phase);
+
     lg.viewport(0,0,lc.width,lc.height);
     lg.clear(lg.COLOR_BUFFER_BIT);
     lg.useProgram(pr);
@@ -737,7 +836,12 @@ void main(){
 
 
 const Bath=(function(){
-  let ctx,master,wet,verb,drone=[],timer,started=false,muted=false,level=0.55;
+  // One fixed output level. There is no in-page volume any more: the device's
+  // own volume is the volume, and the corner bell is purely a mute toggle.
+  const LEVEL=0.5;
+
+  let ctx,master,comp,verb,wet,nodes=[],timers=[],started=false,muted=false,
+      trim=1,wetLevel=0.42;
 
   function impulse(sec,decay){
     const n=Math.floor(ctx.sampleRate*sec), b=ctx.createBuffer(2,n,ctx.sampleRate);
@@ -748,9 +852,39 @@ const Bath=(function(){
     return b;
   }
 
+  // Pink noise (Paul Kellet's filter). The tail is crossfaded into the head so
+  // the buffer can loop forever without a click at the seam.
+  function noise(sec){
+    const n=Math.floor(ctx.sampleRate*sec), b=ctx.createBuffer(2,n,ctx.sampleRate);
+    for(let c=0;c<2;c++){
+      const d=b.getChannelData(c); let b0=0,b1=0,b2=0;
+      for(let i=0;i<n;i++){
+        const w=Math.random()*2-1;
+        b0=0.99765*b0+w*0.0990460; b1=0.96300*b1+w*0.2965164; b2=0.57000*b2+w*1.0526913;
+        d[i]=(b0+b1+b2+w*0.1848)*0.22;
+      }
+      const x=Math.min(4096,n>>3);
+      for(let i=0;i<x;i++){ const a=i/x; d[n-x+i]=d[n-x+i]*(1-a)+d[i]*a; }
+    }
+    return b;
+  }
+
+  function osc(type,freq,det){
+    const o=ctx.createOscillator(); o.type=type; o.frequency.value=freq;
+    if(det) o.detune.value=det; return o;
+  }
+  // Everything feeds the dry master and the reverb send in parallel.
+  function out(node){ node.connect(master); node.connect(verb); }
+  // A very slow LFO onto any AudioParam — the source of all the drift.
+  function drift(param,rate,depth,t){
+    const l=ctx.createOscillator(), a=ctx.createGain();
+    l.frequency.value=rate; a.gain.value=depth;
+    l.connect(a); a.connect(param); l.start(t); nodes.push(l);
+  }
+
+  /* ---- bowls: the original singing bowls, unchanged in character ---- */
   const PITCH=[130.81,146.83,196.00,220.00,261.63,293.66,392.00];
   const PART=[[1,1,11],[2.71,0.40,8],[5.14,0.17,6],[8.62,0.07,4],[12.4,0.03,2.6]];
-
   function strike(f,gain){
     const t=ctx.currentTime;
     const pan=ctx.createStereoPanner?ctx.createStereoPanner():null;
@@ -758,13 +892,11 @@ const Bath=(function(){
     const bus=ctx.createGain(); bus.gain.value=gain;
     const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2400; lp.Q.value=.4;
     bus.connect(lp);
-    if(pan){ lp.connect(pan); pan.connect(master); pan.connect(verb); }
-    else { lp.connect(master); lp.connect(verb); }
-
-    PART.forEach(([ratio,amp,dec])=>{
-      [-0.9,0.9].forEach(det=>{
-        const o=ctx.createOscillator(), g=ctx.createGain();
-        o.type='sine'; o.frequency.value=f*ratio; o.detune.value=det*ratio;
+    if(pan){ lp.connect(pan); out(pan); } else { out(lp); }
+    PART.forEach(function(P){
+      var ratio=P[0],amp=P[1],dec=P[2];
+      [-0.9,0.9].forEach(function(det){
+        const o=osc('sine',f*ratio,det*ratio), g=ctx.createGain();
         g.gain.setValueAtTime(.0001,t);
         g.gain.exponentialRampToValueAtTime(amp*0.5,t+.02);
         g.gain.exponentialRampToValueAtTime(.0001,t+dec);
@@ -772,76 +904,163 @@ const Bath=(function(){
       });
     });
   }
-
-  function schedule(){
-    const f=PITCH[(Math.random()*PITCH.length)|0];
-    strike(f, 0.16+Math.random()*0.14);
-    if(Math.random()<0.28) setTimeout(()=>strike(PITCH[(Math.random()*4)|0],0.10),900+Math.random()*1400);
-    timer=setTimeout(schedule, 7000+Math.random()*13000);
-  }
-
-  function bed(){
+  function bowls(){
     const t=ctx.currentTime;
-    [65.41,98.00,130.81].forEach((f,i)=>{
-      const o=ctx.createOscillator(), g=ctx.createGain(), lp=ctx.createBiquadFilter();
-      o.type=i?'sine':'triangle'; o.frequency.value=f; o.detune.value=(i-1)*3.5;
+    [65.41,98.00,130.81].forEach(function(f,i){
+      const o=osc(i?'sine':'triangle',f,(i-1)*3.5), g=ctx.createGain(),
+            lp=ctx.createBiquadFilter();
       lp.type='lowpass'; lp.frequency.value=440-i*90; lp.Q.value=.7;
       g.gain.setValueAtTime(.0001,t);
       g.gain.exponentialRampToValueAtTime(0.052/(i+1),t+9);
-      const lfo=ctx.createOscillator(), la=ctx.createGain();
-      lfo.frequency.value=0.017+i*0.011; la.gain.value=0.026/(i+1);
-      lfo.connect(la); la.connect(g.gain); lfo.start(t);
-      const flfo=ctx.createOscillator(), fa=ctx.createGain();
-      flfo.frequency.value=0.008+i*0.005; fa.gain.value=130;
-      flfo.connect(fa); fa.connect(lp.frequency); flfo.start(t);
-      o.connect(lp); lp.connect(g); g.connect(master); g.connect(verb);
-      o.start(t); drone.push(o,lfo,flfo);
+      drift(g.gain,0.017+i*0.011,0.026/(i+1),t);
+      drift(lp.frequency,0.008+i*0.005,130,t);
+      o.connect(lp); lp.connect(g); out(g); o.start(t); nodes.push(o);
+    });
+    (function ring(){
+      strike(PITCH[(Math.random()*PITCH.length)|0], 0.16+Math.random()*0.14);
+      if(Math.random()<0.28) timers.push(setTimeout(function(){
+        strike(PITCH[(Math.random()*4)|0],0.10);
+      },900+Math.random()*1400));
+      timers.push(setTimeout(ring, 7000+Math.random()*13000));
+    })();
+  }
+
+  /* ---- Ambient I: low warm drone, no events, just slow breathing ---- */
+  function amb1(){
+    const t=ctx.currentTime;
+    [55.00,82.41,110.00,164.81,220.00].forEach(function(f,i){
+      const o=osc(i%2?'sine':'triangle',f,(i-2)*4), g=ctx.createGain(),
+            lp=ctx.createBiquadFilter();
+      lp.type='lowpass'; lp.frequency.value=300+i*120; lp.Q.value=.6;
+      g.gain.setValueAtTime(.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.062/(1+i*0.55),t+11);
+      drift(g.gain,0.013+i*0.007,0.022/(1+i*0.5),t);
+      drift(lp.frequency,0.006+i*0.004,110,t);
+      o.connect(lp); lp.connect(g); out(g); o.start(t); nodes.push(o);
     });
   }
 
-  function start(){
-    if(started) return; started=true;
-    try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
-    master=ctx.createGain(); master.gain.value=level;
-    const comp=ctx.createDynamicsCompressor();
+  /* ---- Ambient II: airy high bed with sparse crystalline bells ---- */
+  function chime(f,gain){
+    const t=ctx.currentTime;
+    const bus=ctx.createGain(); bus.gain.value=gain;
+    const pan=ctx.createStereoPanner?ctx.createStereoPanner():null;
+    if(pan){ pan.pan.value=(Math.random()*2-1)*0.75; bus.connect(pan); out(pan); }
+    else out(bus);
+    [[1,1,5.5],[2.76,0.30,4.2],[5.40,0.12,3.0],[8.93,0.05,2.0]].forEach(function(P){
+      const o=osc('sine',f*P[0],0), g=ctx.createGain();
+      g.gain.setValueAtTime(.0001,t);
+      g.gain.exponentialRampToValueAtTime(P[1]*0.5,t+.01);
+      g.gain.exponentialRampToValueAtTime(.0001,t+P[2]);
+      o.connect(g); g.connect(bus); o.start(t); o.stop(t+P[2]+.2);
+    });
+  }
+  function amb2(){
+    const t=ctx.currentTime;
+    [523.25,659.25,783.99].forEach(function(f,i){
+      const o=osc('sine',f,(i-1)*6), g=ctx.createGain(), bp=ctx.createBiquadFilter();
+      bp.type='bandpass'; bp.frequency.value=f; bp.Q.value=2.2;
+      g.gain.setValueAtTime(.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.022/(i+1),t+13);
+      drift(g.gain,0.021+i*0.013,0.013/(i+1),t);
+      o.connect(bp); bp.connect(g); out(g); o.start(t); nodes.push(o);
+    });
+    const SCALE=[1046.50,1174.66,1396.91,1567.98,1864.66,2093.00];
+    (function ping(){
+      chime(SCALE[(Math.random()*SCALE.length)|0], 0.10+Math.random()*0.07);
+      timers.push(setTimeout(ping, 2600+Math.random()*5200));
+    })();
+  }
+
+  /* ---- Ambient III: filtered noise weather over a low rumble ---- */
+  function amb3(){
+    const t=ctx.currentTime;
+    const src=ctx.createBufferSource(); src.buffer=noise(6); src.loop=true;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=620; bp.Q.value=0.7;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600;
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.11,t+8);
+    drift(bp.frequency,0.021,340,t);
+    drift(g.gain,0.013,0.035,t);
+    src.connect(bp); bp.connect(lp); lp.connect(g); out(g); src.start(t); nodes.push(src);
+    [41.20,61.74].forEach(function(f,i){
+      const o=osc('sine',f,0), og=ctx.createGain(), olp=ctx.createBiquadFilter();
+      olp.type='lowpass'; olp.frequency.value=150;
+      og.gain.setValueAtTime(.0001,t);
+      og.gain.exponentialRampToValueAtTime(0.046/(i+1),t+10);
+      drift(og.gain,0.009+i*0.006,0.018/(i+1),t);
+      o.connect(olp); olp.connect(og); out(og); o.start(t); nodes.push(o);
+    });
+  }
+
+  // Reverb size and wet amount are part of each bed's character, and trim
+  // evens out perceived loudness so switching modes does not change volume.
+  const MODES={
+    bowls:{build:bowls, ir:[4.2,2.4], wet:0.42, trim:1.00},
+    amb1: {build:amb1,  ir:[5.5,2.2], wet:0.46, trim:0.95},
+    amb2: {build:amb2,  ir:[6.5,1.9], wet:0.52, trim:1.05},
+    amb3: {build:amb3,  ir:[3.5,2.6], wet:0.30, trim:1.00}
+  };
+
+  function start(mode){
+    if(started) return;
+    const M=MODES[mode]; if(!M) return;      // 'none' and anything unknown: stay silent
+    started=true; trim=M.trim; wetLevel=M.wet;
+    try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }
+    catch(e){ started=false; return; }
+    if(ctx.state==='suspended' && ctx.resume) ctx.resume();
+    master=ctx.createGain(); master.gain.value=LEVEL*trim;
+    comp=ctx.createDynamicsCompressor();
     comp.threshold.value=-16; comp.ratio.value=4; comp.attack.value=.02; comp.release.value=.5;
     master.connect(comp); comp.connect(ctx.destination);
-    verb=ctx.createConvolver(); verb.buffer=impulse(4.2,2.4);
-    wet=ctx.createGain(); wet.gain.value=0.42;
+    verb=ctx.createConvolver(); verb.buffer=impulse(M.ir[0],M.ir[1]);
+    wet=ctx.createGain(); wet.gain.value=wetLevel;
     verb.connect(wet); wet.connect(comp);
-    bed();
-    setTimeout(schedule,3500);
+    M.build();
   }
 
-  function apply(){
-    if(!master) return;
-    master.gain.setTargetAtTime(muted?0:level, ctx.currentTime, 0.25);
-    if(wet) wet.gain.setTargetAtTime(muted?0:0.42, ctx.currentTime, 0.25);
+  // The reverb send bypasses master, so muting has to close both or the tail
+  // keeps ringing after the dry signal is gone.
+  function toggle(){
+    muted=!muted;
+    if(ctx){
+      master.gain.setTargetAtTime(muted?0:LEVEL*trim, ctx.currentTime, 0.25);
+      wet.gain.setTargetAtTime(muted?0:wetLevel, ctx.currentTime, 0.25);
+    }
+    return muted;
   }
-  return {
-    start,
-    setLevel(v){ level=v; apply(); },
-    toggle(){ muted=!muted; apply(); return muted; }
-  };
+
+  return { start:start, toggle:toggle };
 })();
 
-const muteBtn=document.getElementById('mute'), volEl=document.getElementById('vol'), sndBox=document.getElementById('snd');
+const muteBtn=document.getElementById('mute'), sndBox=document.getElementById('snd');
 muteBtn.onclick=()=>{
   const m=Bath.toggle();
   muteBtn.classList.toggle('off',m);
-  muteBtn.innerHTML=m?'&#9678;':'&#9673;';
-  sndBox.classList.add('live'); setTimeout(()=>sndBox.classList.remove('live'),2200);
-};
-volEl.oninput=()=>{
-  Bath.setLevel(volEl.value/100);
+  muteBtn.setAttribute('aria-pressed',String(m));
+  muteBtn.setAttribute('aria-label',m?'Unmute':'Mute');
   sndBox.classList.add('live'); clearTimeout(window.__sv);
   window.__sv=setTimeout(()=>sndBox.classList.remove('live'),2200);
 };
 
+// Mirror :checked onto the label so the chip can be styled without :has().
+const picks=Array.prototype.slice.call(document.querySelectorAll('#snd-pick input'));
+function syncPicks(){ picks.forEach(p=>p.parentNode.classList.toggle('on',p.checked)); }
+picks.forEach(p=>p.addEventListener('change',syncPicks));
+syncPicks();
+
 document.getElementById('go').onclick=()=>{
+  const sel=document.querySelector('#snd-pick input:checked');
+  const mode=sel?sel.value:'bowls';
   document.getElementById('gate').classList.add('gone');
-  Bath.start();
-  sndBox.classList.add('live'); setTimeout(()=>sndBox.classList.remove('live'),4200);
+  if(mode==='none'){
+    // Nothing to mute, so do not offer a mute control.
+    sndBox.hidden=true;
+  }else{
+    Bath.start(mode);
+    sndBox.classList.add('live'); setTimeout(()=>sndBox.classList.remove('live'),4200);
+  }
   running=true; t0=last=performance.now();
   requestAnimationFrame(frame);
   cycle();

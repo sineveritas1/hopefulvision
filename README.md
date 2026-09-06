@@ -6,7 +6,8 @@ spills where your finger is. Ten fingers, each its own colour.
 Live at **[trippingtoy.com](https://trippingtoy.com)**.
 
 One self-contained HTML file — WebGL2 particle simulation, generative ambient
-audio, no dependencies, no build step. Works on desktop and mobile; add it to a
+audio (singing bowls plus three synthesised beds, or silence), no dependencies,
+no build step. Works on desktop and mobile; add it to a
 phone home screen and it runs fullscreen as a web app.
 
 ## Run it
@@ -58,7 +59,7 @@ block for each, and `CLAUDE.md` has the commands.
 public/index.html    the entire site
 public/_headers      response headers
 public/404.html      not-found page
-functions/_middleware.js  redirects www -> apex
+functions/_middleware.js  sends every other host to trippingtoy.com
 functions/api/       serverless endpoints (one example: /api/health)
 wrangler.toml        project config and resource bindings
 CLAUDE.md            working notes and conventions

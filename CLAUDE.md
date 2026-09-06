@@ -16,7 +16,7 @@ public/            <- the ONLY directory that gets served
   _headers           Cloudflare Pages response headers
   404.html           not-found page, same palette
 functions/         <- serverless API and request middleware
-  _middleware.js     redirects www -> apex on every request
+  _middleware.js     sends every non-canonical host to trippingtoy.com
   api/health.js      answers GET /api/health
 wrangler.toml      <- project name, output dir, resource bindings
 package.json       <- wrangler only; the site itself has no dependencies
@@ -60,7 +60,49 @@ Architecture of the render loop, for orientation:
 
 The gate overlay (`#gate`) runs its own separate WebGL1 context drawing a
 rotating 4-D tesseract projected to 2-D. It is independent of the main sim; the
-`Click me` button starts audio (browsers require a gesture) and the main loop.
+`Click me` button reads the chosen sound mode, starts audio (browsers require a
+gesture) and starts the main loop.
+
+Two things about the gate are easy to break:
+
+- **The logo canvas must stay `position:static`.** The global `canvas` rule pins
+  every canvas to `position:fixed;inset:0` for the fullscreen sim. Without the
+  explicit override, `#logo` leaves the flex flow and floats at the top of the
+  viewport, overlapping the title — and its margins silently stop doing
+  anything.
+- **The tesseract's rotation is an integrated phase, not a function of absolute
+  time.** `phase += dt*(1.0+0.55*on)` is deliberate. The earlier form,
+  `project(t*(1.0+0.55*on))`, scaled elapsed time by the interaction amount, so
+  touching the logo moved an argument that grows all session: measured against
+  the current build, a touch 20 seconds in produced a single-frame geometry jump
+  48x the idle rate, and it got worse the longer the page stayed open. `dt` is
+  clamped for the same reason — a backgrounded tab must not bank up seconds of
+  rotation and spend them in one frame. Never reintroduce a term that multiplies
+  absolute time by an interactive value.
+
+## Sound
+
+Five choices on the gate, radio buttons, `Bowls` default: the original singing
+bowls, three ambient beds, and `Silence`. The mode is picked once before entry
+and fixed for the session, so nothing needs to tear a graph down and rebuild it.
+
+Every bed is **synthesised in Web Audio — there are no audio files, and adding
+some would be a real regression.** Responses are served `no-store` (see
+Caching), so any bundled loop would re-download in full on every single visit;
+recordings also loop audibly, carry licence and attribution obligations, and
+would be the project's first binary dependency. Oscillators cost nothing, never
+repeat, and keep the site one self-contained file.
+
+`Bath` owns all of it. `MODES` maps a mode name to a builder plus its reverb
+size, wet amount, and a loudness `trim` so switching does not change perceived
+volume. To add a bed, write a builder and add one `MODES` entry — `out(node)`
+connects to the dry master and the reverb send, and `drift(param,rate,depth,t)`
+attaches the very slow LFO that everything here uses to breathe.
+
+Output level is fixed at `LEVEL`. There is no in-page volume: the device's
+volume is the volume, and the corner bell is only a mute. Mute has to close
+**both** `master` and `wet` — the reverb send bypasses master, so closing one
+leaves the tail ringing.
 
 ## Local development
 
