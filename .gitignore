@@ -1,0 +1,12 @@
+node_modules/
+
+# Wrangler local state, caches, and the local D1/R2/KV simulators
+.wrangler/
+
+# Local secrets for `wrangler pages dev` — never commit these
+.dev.vars
+.env
+.env.*
+
+.DS_Store
+*.log

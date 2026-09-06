@@ -1,0 +1,39 @@
+# Cloudflare configuration for trippingtoy.com
+#
+# This file is the source of truth for the project's name, its static output
+# directory, and every resource binding (database / storage / cache).
+#
+# Adding a resource is always two steps:
+#   1. create it once on the account   (npx wrangler d1 create ... etc.)
+#   2. record the binding here         (so Functions can reach it via `env`)
+#
+# See CLAUDE.md -> "Growing the backend" for the exact commands.
+
+name = "trippingtoy"
+compatibility_date = "2025-09-06"
+
+# Everything inside public/ is what actually gets served. Nothing else in this
+# repo is uploaded, which is why the site lives there and not at the root.
+pages_build_output_dir = "public"
+
+
+# ---------------------------------------------------------------------------
+# Bindings — all commented out until the matching resource exists.
+# Uncomment a block only after step 1 above, or deploys will fail.
+# ---------------------------------------------------------------------------
+
+# D1 — SQL database (SQLite). Reached in a Function as `env.DB`.
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "trippingtoy-db"
+# database_id = "paste-the-id-wrangler-prints"
+
+# R2 — object storage for files/images/audio. Reached as `env.MEDIA`.
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "trippingtoy-media"
+
+# KV — key/value store, good for counters, flags, cached fragments.
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "paste-the-id-wrangler-prints"

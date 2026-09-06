@@ -1,0 +1,14 @@
+{
+  "name": "trippingtoy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Are You Tripping? — a WebGL2 particle toy at trippingtoy.com",
+  "scripts": {
+    "dev": "wrangler pages dev",
+    "deploy": "wrangler pages deploy",
+    "tail": "wrangler pages deployment tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

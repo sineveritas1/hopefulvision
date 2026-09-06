@@ -1,0 +1,16 @@
+# Cloudflare Pages response headers.
+# Syntax: a path pattern, then indented "Header: value" lines under it.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
+
+# The page is one self-contained file, so never let a browser serve a stale
+# copy of it — a cached index.html would pin someone to an old version of the
+# whole site. Cloudflare's edge cache is purged on every deploy regardless.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
