@@ -57,6 +57,8 @@ block for each, and `CLAUDE.md` has the commands.
 ```
 public/index.html    the entire site
 public/_headers      response headers
+public/_redirects    www -> apex canonical redirect
+public/404.html      not-found page
 functions/api/       serverless endpoints (one example: /api/health)
 wrangler.toml        project config and resource bindings
 CLAUDE.md            working notes and conventions

@@ -1,0 +1,3 @@
+# Send the www hostname to the apex so the site lives at one canonical address.
+# Handled by Pages' static redirect engine — no Function invocation per request.
+https://www.trippingtoy.com/* https://trippingtoy.com/:splat 301
