@@ -3,8 +3,8 @@
 A single-page WebGL2 toy: a quarter-million GPU particles advected through a
 curl-noise field, painted with a spectral (wavelength → RGB) palette. Touch or
 mouse input injects vortices — up to ten pointers, each its own hue. There is a
-chord struck from a singing-bowl set on every touch, and aphorisms fade in
-and out over the top.
+singing bowl struck on every touch, and aphorisms fade in and out over the
+top.
 
 The whole thing is one hand-written HTML file with no dependencies and no build
 step. Open it in a browser and it runs.
@@ -83,47 +83,41 @@ Two things about the gate are easy to break:
 
 ## Sound
 
-The page is silent until touched. Every touch on the field strikes a chord, and
-each one moves the progression along. There is no ambient bed and no mode
-selection — an earlier build offered four beds behind radio buttons on the gate;
-that is gone.
-
-**Why the randomness is safe.** Six chords, all diatonic to C, all four notes,
-and every one checked tritone-free. The tritone is the only interval in a
-diatonic set that reads as tension, so a set without one cannot produce a harsh
-chord in any order — which is what lets the next chord be chosen at random.
-This is why `V` is voiced sus (G C D A) rather than G7: the dominant seventh
-would put B against F and reintroduce exactly the interval the set excludes.
-**Adding a chord means checking it for a tritone first**, or the guarantee is
+The page is silent until touched. Every touch on the field strikes one singing
+bowl. There is no ambient bed, no mode selection, and no chords — earlier builds
+had four selectable beds behind radio buttons, then four-note chords; both are
 gone.
 
-`NEXT` holds weighted transitions so it wanders like a progression rather than
-shuffling; no chord follows itself. The first touch is always the tonic.
+**Why any sequence is safe.** The notes come from C major pentatonic
+(`SCALE`, C3-C6). A pentatonic set contains no semitone and no tritone, so *any
+two of its notes sounded together are consonant*. That property is doing real
+work here rather than being a nicety: a bowl rings for the better part of ten
+seconds while the rate limit allows a new one every 240ms, so up to sixteen
+notes overlap at once. Whatever anyone taps, however fast, what is still ringing
+cannot clash with what was just struck. **Adding a note outside C D E G A breaks
+this** — verified across 163 overlapping pairs in a real browser: zero
+semitones, zero tritones, smallest interval 2 semitones.
 
-**Voicing.** `voice()` builds a close voicing — root near the requested
-register, every other note stacked at the nearest position above the one below
-— giving a span of about an octave. Do not replace this with a fixed offset per
-voice: that strands the top note an octave clear of the rest whenever the touch
-is high on the screen (measured: `A3 C4 E4 G5`, with 8-semitone leaps between
-chords). The root is blended toward where the previous root sat, which keeps
-consecutive chords in the same register; nearby taps move voices about 5
-semitones.
+**Motion.** `STEPS` is a weighted walk over scale degrees — mostly stepwise,
+the odd small leap, and no zero, so a note never immediately repeats. Picking
+uniformly from the scale is equally consonant but sounds aimless; stepwise
+motion is what makes a line sound intended. The walk is unbiased (mean net
+drift measured at -0.015 degrees per 20-note run) and settles in the middle of
+the range about 73% of the time, so it neither wanders to an edge nor needs
+recentring.
 
-Touch height picks the register and touch side the stereo placement. Neither
-can create dissonance, because the pitch classes are already fixed by the
-progression.
+Touch height asks for a register and the walk supplies the motion; the two are
+blended so the line follows the finger without becoming a keyboard. Touch side
+sets the pan. Neither can create dissonance — every available pitch is already
+in the safe set.
 
-**Timbre** is the original struck singing bowl — inharmonic partials over a
-long decay, each doubled and detuned — tuned to a chord tone instead of played
-alone. Decays are shorter than the single-bowl values because four ring at
-once. The notes are rolled upward a few tens of milliseconds apart; struck dead
-simultaneously it stops sounding like bowls and starts sounding like a pad.
+**Timbre** is the original struck singing bowl: inharmonic partials over a long
+decay, each doubled and detuned. Ten oscillators per note.
 
-**The rate limit is load-bearing.** A chord is ~28 oscillators ringing for
-seconds, and ten fingers land as ten `pointerdown` events in one frame. `GAP`
-and `MAXACTIVE` are what stop a drum-roll of taps from burying the audio thread
-and turning the harmony to mush. Muting returns before scheduling anything, so
-a muted page costs nothing.
+**The rate limit is load-bearing.** Ten fingers land as ten `pointerdown` events
+in one frame, and each note rings for seconds. `GAP` and `MAXACTIVE` are what
+stop a drum-roll of taps from burying the audio thread. Muting returns before
+scheduling anything, so a muted page schedules nothing at all — measured.
 
 Output is fixed at `LEVEL`; the device's volume is the volume and the corner
 bell is only a mute. Mute must close **both** `master` and `wet` — the reverb

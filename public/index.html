@@ -421,7 +421,7 @@ function pdata(e,prev){
            s: prev ? prev.s : Math.random() };
 }
 cv.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,pdata(e,null));
-  Bath.chord(e.clientX/innerWidth, e.clientY/innerHeight);});
+  Bath.note(e.clientX/innerWidth, e.clientY/innerHeight);});
 cv.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,pdata(e,ptrs.get(e.pointerId)));});
 ['pointerup','pointercancel','pointerleave','pointerout'].forEach(k=>
   cv.addEventListener(k,e=>ptrs.delete(e.pointerId)));
@@ -823,89 +823,46 @@ const Bath=(function(){
     return b;
   }
   function out(node){ node.connect(master); node.connect(verb); }
-
-  /* ---------------------------------------------------------------------
-     Harmony.
-
-     Six chords, all diatonic to C and all four notes. Every one is checked
-     tritone-free, which is the whole trick: the tritone is the only interval
-     in a diatonic set that reads as tension, so a set without one cannot
-     produce a harsh chord no matter what order it is played in. That is what
-     makes the randomness safe. Dominant sevenths are deliberately absent —
-     G is voiced sus (G C D A) rather than G7, which would reintroduce B-F.
-
-     Pitch classes as semitones from C.
-  --------------------------------------------------------------------- */
-  const CHORDS={
-    I:  [0,4,7,11],   // Cmaj7
-    ii: [2,5,9,0],    // Dm7
-    iii:[4,7,11,2],   // Em7
-    IV: [5,9,0,4],    // Fmaj7
-    V:  [7,0,2,9],    // Gsus (G C D A)
-    vi: [9,0,4,7]     // Am7
-  };
-
-  // Weighted transitions, so it wanders rather than shuffling. No chord can
-  // follow itself, and every listed motion is a common, resolved-sounding one.
-  const NEXT={
-    I:  [['vi',3],['IV',3],['V',2],['iii',2]],
-    ii: [['V',3],['I',2],['IV',2]],
-    iii:[['vi',3],['IV',3],['ii',1]],
-    IV: [['I',3],['V',3],['vi',2],['ii',1]],
-    V:  [['I',4],['vi',3],['IV',1]],
-    vi: [['IV',3],['ii',2],['I',2],['V',2]]
-  };
-  function pickNext(k){
-    const o=NEXT[k]; let total=0;
-    for(const e of o) total+=e[1];
-    let r=Math.random()*total;
-    for(const e of o){ r-=e[1]; if(r<=0) return e[0]; }
-    return o[0][0];
-  }
-
-  // Voice leading. Each note is placed in the octave nearest where the same
-  // voice sat in the previous chord, pulled part-way toward the register the
-  // touch asked for. Without this the chords are correct but lurch between
-  // registers; with it they hand off common tones and move a few semitones.
-  const LO=45, HI=84;
-  let voicing=null;
-  function voice(pcs,center){
-    // Close voicing: the root lands near the requested register and every other
-    // note is stacked at the nearest position above the one below it, so the
-    // chord spans about an octave. Giving each voice a fixed offset instead
-    // strands the top note an octave clear of the rest whenever the touch is
-    // high on the screen (measured: A3 C4 E4 G5, and 8-semitone leaps between
-    // chords). The root is blended toward where the previous root sat, which
-    // is what keeps consecutive chords in the same register.
-    const wantRoot=center-7;
-    const ref=voicing?voicing[0]*0.6+wantRoot*0.4:wantRoot;
-    let n=pcs[0]+12*Math.round((ref-pcs[0])/12);
-    while(n<LO) n+=12; while(n>HI-14) n-=12;
-    const v=[n];
-    for(let i=1;i<pcs.length;i++){
-      let m=pcs[i]+12*Math.round((v[i-1]-pcs[i])/12);
-      while(m<=v[i-1]) m+=12;
-      v.push(m);
-    }
-    return v;
-  }
   function mtof(m){ return 440*Math.pow(2,(m-69)/12); }
 
   /* ---------------------------------------------------------------------
-     Timbre: the same struck singing bowl as before — inharmonic partials over
-     a long decay, each doubled and detuned — but tuned to a chord tone rather
-     than played alone. Decays are shorter than the original single-bowl values
-     because four of these ring at once and would otherwise pile into mud.
-  --------------------------------------------------------------------- */
-  const PART=[[1,1,7.0],[2.71,0.40,5.2],[5.14,0.17,3.8],[8.62,0.07,2.4],[12.4,0.03,1.6]];
+     One note per touch, from C major pentatonic across three octaves.
 
-  function bowl(f,when,gain,pan,parts){
+     The pentatonic set is the entire safety argument. It contains no semitone
+     and no tritone, so ANY two of these notes sounded together are consonant —
+     which matters here far more than it would for a keyboard, because a bowl
+     rings for the better part of ten seconds and consecutive touches always
+     overlap. Whatever anyone taps, however fast, the notes still ringing from
+     a moment ago cannot clash with the one just struck.
+
+     Adding a note outside this set breaks that guarantee. C D E G A only.
+  --------------------------------------------------------------------- */
+  const SCALE=[48,50,52,55,57, 60,62,64,67,69, 72,74,76,79,81, 84]; // C3 - C6
+
+  // Mostly stepwise motion, with the odd small leap, and never a repeat. A
+  // uniform random pick over the scale is consonant but sounds aimless;
+  // stepwise motion is what makes a line sound intended rather than shuffled.
+  const STEPS=[[-3,1],[-2,3],[-1,6],[1,6],[2,3],[3,1]];
+  function step(){
+    let total=0; for(const e of STEPS) total+=e[1];
+    let r=Math.random()*total;
+    for(const e of STEPS){ r-=e[1]; if(r<=0) return e[0]; }
+    return 1;
+  }
+
+  /* Timbre: the original struck singing bowl — inharmonic partials over a long
+     decay, each doubled and detuned. Decays sit between the original single
+     bowl and the shorter values the chord build needed, since several of these
+     ring together but never four at once. */
+  const PART=[[1,1,8.0],[2.71,0.40,5.6],[5.14,0.17,4.0],[8.62,0.07,2.6],[12.4,0.03,1.7]];
+
+  function bowl(f,when,gain,pan){
     const bus=ctx.createGain(); bus.gain.value=gain;
     const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2400; lp.Q.value=.4;
     bus.connect(lp);
     const p=ctx.createStereoPanner?ctx.createStereoPanner():null;
     if(p){ p.pan.value=pan; lp.connect(p); out(p); } else out(lp);
-    PART.slice(0,parts).forEach(function(P){
+    PART.forEach(function(P){
       const ratio=P[0],amp=P[1],dec=P[2];
       [-0.9,0.9].forEach(function(det){
         const o=ctx.createOscillator(), g=ctx.createGain();
@@ -918,34 +875,31 @@ const Bath=(function(){
     });
   }
 
-  // Rate limit and a hard ceiling on overlapping chords. Ten fingers land as
-  // ten pointerdowns in one frame, and each chord is ~28 oscillators that ring
-  // for seconds, so without both of these a drum-roll of taps would bury the
-  // audio thread and turn the harmony to mush.
-  const GAP=550, MAXACTIVE=9;
-  let cur='I', lastAt=-1e9, active=0;
+  // Rate limit and a ceiling on overlapping notes. Ten fingers land as ten
+  // pointerdowns in one frame, and each note is ten oscillators ringing for
+  // seconds. Without both, a drum-roll of taps buries the audio thread.
+  const GAP=240, MAXACTIVE=16;
+  let deg=5, lastAt=-1e9, active=0, first=true;
 
-  function chord(nx,ny){
+  function note(nx,ny){
     if(!ctx||muted) return;
     const now=performance.now();
     if(now-lastAt<GAP||active>=MAXACTIVE) return;
-    lastAt=now; active++; setTimeout(function(){active--;},7500);
+    lastAt=now; active++; setTimeout(function(){active--;},8600);
 
-    // Touch height chooses the register, touch side the stereo placement.
-    // Neither can create dissonance: the pitch classes are already fixed.
+    // Touch height asks for a register, the walk supplies the motion. Blending
+    // the two lets the line follow the finger without turning into a keyboard.
     const y=Math.max(0,Math.min(1,ny));
-    const center=66-y*10;
-    const pan=Math.max(-1,Math.min(1,(nx-0.5)*1.3));
+    const want=Math.round((1-y)*(SCALE.length-1));
+    if(first){ deg=want; first=false; }
+    else{
+      let d=deg+step();
+      if(Math.abs(d-want)>4) d+=(want>d?2:-2);
+      deg=Math.max(0,Math.min(SCALE.length-1,d));
+    }
 
-    voicing=voice(CHORDS[cur],center);
-    const t=ctx.currentTime+0.02;
-    voicing.forEach(function(m,i){
-      // A slight upward roll, the way a set of bowls is actually struck. Hit
-      // dead-simultaneously it sounds like a synth pad, not like bowls.
-      const when=t+i*(0.045+Math.random()*0.055);
-      bowl(mtof(m), when, (i===0?0.115:0.085)*(1-i*0.06), pan*(1-i*0.18), i===0?5:3);
-    });
-    cur=pickNext(cur);
+    const pan=Math.max(-1,Math.min(1,(nx-0.5)*1.25));
+    bowl(mtof(SCALE[deg]), ctx.currentTime+0.02, 0.185+Math.random()*0.05, pan);
   }
 
   function start(){
@@ -973,7 +927,7 @@ const Bath=(function(){
     return muted;
   }
 
-  return { start:start, toggle:toggle, chord:chord };
+  return { start:start, toggle:toggle, note:note };
 })();
 
 const muteBtn=document.getElementById('mute'), sndBox=document.getElementById('snd');
