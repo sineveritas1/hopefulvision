@@ -1,9 +1,9 @@
-# Are You Tripping?
+# Hopeful Vision
 
 A quarter million motes drifting on a curl field. Touch anywhere and paint
 spills where your finger is. Ten fingers, each its own colour.
 
-Live at **[trippingtoy.com](https://trippingtoy.com)**.
+Live at **[hopeful.vision](https://hopeful.vision)**.
 
 One self-contained HTML file — WebGL2 particle simulation, and a singing bowl
 struck on every touch, drawn from a pentatonic scale so that whatever is still
@@ -43,10 +43,10 @@ Build settings:
 | Build command | *(leave empty)* |
 | Build output directory | `public` |
 
-**2. Point the domain at it.** `trippingtoy.com` needs to be on Cloudflare —
+**2. Point the domain at it.** `hopeful.vision` needs to be on Cloudflare —
 either registered there, or registered elsewhere with its nameservers changed
 to the pair Cloudflare gives you. Then, in the Pages project → Custom domains →
-Set up a domain → add `trippingtoy.com` and `www.trippingtoy.com`. The DNS
+Set up a domain → add `hopeful.vision` and `www.hopeful.vision`. The DNS
 records are created automatically and the certificate is issued within a few
 minutes.
 
@@ -60,7 +60,7 @@ block for each, and `CLAUDE.md` has the commands.
 public/index.html    the entire site
 public/_headers      response headers
 public/404.html      not-found page
-functions/_middleware.js  sends every other host to trippingtoy.com
+functions/_middleware.js  sends every other host to hopeful.vision
 functions/api/       serverless endpoints (one example: /api/health)
 wrangler.toml        project config and resource bindings
 CLAUDE.md            working notes and conventions

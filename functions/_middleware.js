@@ -1,9 +1,9 @@
 /**
  * Canonical-host redirect.
  *
- * Several hostnames are attached to this Pages project — trippingtoy.com,
- * trippingtoys.com, and the www form of each — and they all serve identical
- * content. Left alone that splits search ranking signals across addresses and
+ * Several hostnames are attached to this Pages project — hopeful.vision, the
+ * older trippingtoy.com and trippingtoys.com, and the www form of each — and
+ * they all serve identical content. Left alone that splits search ranking signals across addresses and
  * gives the site no single canonical home.
  *
  * Rather than one rule per domain, anything that is not the canonical host is
@@ -19,7 +19,10 @@
  * same job at the edge without invoking a Function; if one is ever added, this
  * file becomes redundant and should be deleted.
  */
-const CANONICAL = 'trippingtoy.com';
+// Verified attached and serving before this was switched over: pointing this
+// at a domain that is not yet on the project 301s every visitor into a dead
+// name and takes the site down.
+const CANONICAL = 'hopeful.vision';
 
 export function onRequest({ request, next }) {
   const url = new URL(request.url);

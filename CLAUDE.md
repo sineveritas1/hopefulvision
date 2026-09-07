@@ -1,4 +1,4 @@
-# trippingtoy.com
+# hopeful.vision
 
 A single-page WebGL2 toy: a quarter-million GPU particles advected through a
 curl-noise field, painted with a spectral (wavelength → RGB) palette. Touch or
@@ -17,7 +17,7 @@ public/            <- the ONLY directory that gets served
   _headers           Cloudflare Pages response headers
   404.html           not-found page, same palette
 functions/         <- serverless API and request middleware
-  _middleware.js     sends every non-canonical host to trippingtoy.com
+  _middleware.js     sends every non-canonical host to hopeful.vision
   api/health.js      answers GET /api/health
 wrangler.toml      <- project name, output dir, resource bindings
 package.json       <- wrangler only; the site itself has no dependencies
@@ -330,7 +330,7 @@ shader compile errors before assuming the logic is wrong.
 
 Deployment is automatic: **pushing to the default branch publishes the site.**
 Cloudflare Pages watches this repository, builds nothing (there is no build
-step), uploads `public/`, and serves it at trippingtoy.com. Pull requests get
+step), uploads `public/`, and serves it at hopeful.vision. Pull requests get
 their own preview URL.
 
 There is no deploy script to run and no secret to hold. If a deploy needs to be
@@ -374,13 +374,13 @@ there, commented, waiting for its id.
 **Database (D1, SQLite):**
 
 ```bash
-npx wrangler d1 create trippingtoy-db          # prints database_id
+npx wrangler d1 create hopeful-vision-db          # prints database_id
 # uncomment the [[d1_databases]] block in wrangler.toml, paste the id
 
-npx wrangler d1 migrations create trippingtoy-db add_scores
+npx wrangler d1 migrations create hopeful-vision-db add_scores
 # edit the generated file in migrations/
-npx wrangler d1 migrations apply trippingtoy-db --local    # test first
-npx wrangler d1 migrations apply trippingtoy-db --remote   # then production
+npx wrangler d1 migrations apply hopeful-vision-db --local    # test first
+npx wrangler d1 migrations apply hopeful-vision-db --remote   # then production
 ```
 
 ```js
@@ -396,7 +396,7 @@ step — do not hand-edit the remote database.
 **File storage (R2):**
 
 ```bash
-npx wrangler r2 bucket create trippingtoy-media
+npx wrangler r2 bucket create hopeful-vision-media
 # uncomment the [[r2_buckets]] block in wrangler.toml
 ```
 

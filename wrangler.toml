@@ -1,4 +1,4 @@
-# Cloudflare configuration for trippingtoy.com
+# Cloudflare configuration for hopeful.vision
 #
 # This file is the source of truth for the project's name, its static output
 # directory, and every resource binding (database / storage / cache).
@@ -9,6 +9,9 @@
 #
 # See CLAUDE.md -> "Growing the backend" for the exact commands.
 
+# The Cloudflare Pages PROJECT name, not the domain. It stays "trippingtoy"
+# even though the site is now hopeful.vision — renaming it here would not rename
+# the project, it would just stop matching the one that exists.
 name = "trippingtoy"
 compatibility_date = "2025-09-06"
 
@@ -25,13 +28,13 @@ pages_build_output_dir = "public"
 # D1 — SQL database (SQLite). Reached in a Function as `env.DB`.
 # [[d1_databases]]
 # binding = "DB"
-# database_name = "trippingtoy-db"
+# database_name = "hopeful-vision-db"
 # database_id = "paste-the-id-wrangler-prints"
 
 # R2 — object storage for files/images/audio. Reached as `env.MEDIA`.
 # [[r2_buckets]]
 # binding = "MEDIA"
-# bucket_name = "trippingtoy-media"
+# bucket_name = "hopeful-vision-media"
 
 # KV — key/value store, good for counters, flags, cached fragments.
 # [[kv_namespaces]]
