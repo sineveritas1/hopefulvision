@@ -81,27 +81,30 @@ message says so and says to restart the browser, because reloading genuinely
 cannot fix that state. The old message, "This needs WebGL2.", was a dead end
 that misdescribed the usual cause.
 
-`q` is the adaptive guard on particle sprite size, and it exists because of a
-specific, measured failure mode: **the page freezes about eleven seconds into a
-sustained press.**
+`q` is a defensive guard on particle sprite size: sustained slow frames shrink
+the sprite until they recover. On hardware that keeps up it stays at 1 and is a
+no-op, so do not remove it to "restore quality". It reacts to two slow frames
+running rather than one, because a lone slow frame is usually a GC pause or the
+phone throttling, and none of those get better by shrinking sprites — an earlier
+version cut on a single frame and pinned `q` at its floor for a whole session,
+degrading the picture for a cause it could not fix.
 
-The cause is a ramp, not a spike. `heat` decays as `exp(-uDt*0.20)` — a five
-second time constant — so a held finger keeps raising heat across the field for
-ten to fifteen seconds before it plateaus. `gl_PointSize` scales by
-`(1.0+1.5*heat)`, and cost follows sprite *area*, so that ramp grows the fill
-load by up to 10.6x. Eleven seconds is roughly 2.2 time constants, i.e. ~89% of
-the way to saturation, which is where a phone crosses from keeping up to not.
+**A caution about why this exists.** It was written to chase a freeze roughly
+eleven seconds into a sustained press, reported on an Android device. The
+reasoning at the time: `heat` decays as `exp(-uDt*0.20)`, a five second time
+constant, so a held finger keeps raising heat across the field for ten to
+fifteen seconds; `gl_PointSize` scales by `(1.0+1.5*heat)` and cost follows
+sprite *area*, so that ramp grows fill load by up to 10.6x, and eleven seconds
+is about 2.2 time constants. That story fits the timing, **but it was never
+demonstrated** — the freeze was never reproduced here, since this container
+renders in software. Two other hypotheses were tested and both failed.
 
-The first version of this guard waited for 45 consecutive frames slower than
-34ms. That is useless here: once frames are 200ms, 45 of them is nine seconds,
-which is the freeze itself. It now cuts `q` on a *single* frame over 100ms, eases
-down on a short run of milder ones, and recovers slowly so it settles rather
-than oscillating. Modelled against the heat ramp above, at the eleven second
-mark the old form left frames at 111ms and the new one holds 26ms.
-
-`q` stays at 1 and changes nothing on hardware that keeps up — on a device that
-never drops a frame it is already a no-op, so do not remove it to "restore
-quality". Do not weaken it back into a run-of-N-frames test either.
+The freeze was later reported resolved, without any throttle being applied. The
+most likely actual cause is the one fixed in the meantime: **the gate's logo
+loop never stopped**, so a full-screen 62-segment fragment shader ran every
+frame alongside the main simulation for the entire session. That is a concrete,
+verified bug; the heat ramp above is a hypothesis that happened to fit. Treat it
+as such, and do not cite it as a measured finding.
 
 The gate overlay (`#gate`) runs its own separate WebGL1 context drawing a
 tesseract and a dodecahedron warped together into one body.
