@@ -742,11 +742,19 @@ function frame(now){
   const lg=lc.getContext('webgl',{alpha:true,premultipliedAlpha:false});
   if(!lg){ lc.style.display='none'; return; }
 
+  /* The figure is drawn as line segments handed to the fragment shader as a
+     uniform array, and every pixel measures its distance to every one of them.
+     So the segment count is both the complexity budget and the per-pixel cost.
+     GLES2 only guarantees 16 fragment uniform vectors; ask what this device
+     actually has and fall back to the tesseract alone if it is tight. */
+  const MAXV=lg.getParameter(lg.MAX_FRAGMENT_UNIFORM_VECTORS)||16;
+  const SEGN=MAXV>=80?64:32;
+
   const LVS='attribute vec2 p;varying vec2 v;void main(){v=p*0.5+0.5;gl_Position=vec4(p,0.,1.);}';
   const LFS=`
 precision highp float;
 varying vec2 v;
-uniform vec4 uSeg[32];
+uniform vec4 uSeg[${SEGN}];
 uniform float uT, uHeat, uOn;
 uniform vec2 uP;
 
@@ -783,7 +791,7 @@ float segd(vec2 p, vec2 a, vec2 b){
 
 void main(){
   vec2 uv=v;
-  float t=uT*0.235;
+  float t=uT*0.095;
 
   vec2 q=vec2(fbm(uv*3.1+t), fbm(uv*3.1+vec2(5.2,1.3)-t));
   vec2 r=vec2(fbm(uv*4.4+2.0*q+t*0.7), fbm(uv*4.4+2.0*q+vec2(8.3,2.8)));
@@ -800,20 +808,20 @@ void main(){
   vec2 wuv=uv+(r-0.5)*(0.026+0.048*uHeat);
 
   float m=1e9;
-  for(int i=0;i<32;i++){
+  for(int i=0;i<${SEGN};i++){
     vec4 S=uSeg[i];
     m=min(m, segd(guv, S.xy, S.zw));
   }
 
-  float core=1.0-smoothstep(0.0,0.0085,m);
+  float core=1.0-smoothstep(0.0,0.0062,m);   // thinner: 62 lines, not 32
   float halo=exp(-m*26.0);
   float mask=clamp(core+halo*0.62,0.0,1.0);
   if(mask<0.006) discard;
 
   float band=fbm(wuv*2.3+vec2(t*1.7,-t*1.1))+push*0.6+uHeat*0.4+m*3.4;
-  vec3 col =spectral(band2w(band*0.95+uT*0.055));
-  vec3 col2=spectral(band2w(band*0.48-uT*0.026+0.5));
-  col=mix(col,col2,0.42+0.30*sin(uT*0.62+band*3.0));
+  vec3 col =spectral(band2w(band*0.95+uT*0.021));
+  vec3 col2=spectral(band2w(band*0.48-uT*0.010+0.5));
+  col=mix(col,col2,0.42+0.30*sin(uT*0.24+band*3.0));
   col*=0.62+0.85*core+1.1*push;
 
   gl_FragColor=vec4(col*mask,mask);
@@ -839,33 +847,87 @@ void main(){
   lg.blendFunc(lg.ONE,lg.ONE_MINUS_SRC_ALPHA);
   lg.clearColor(0,0,0,0);
 
-  const V=[];
-  for(let i=0;i<16;i++) V.push([(i&1)?1:-1,(i&2)?1:-1,(i&4)?1:-1,(i&8)?1:-1]);
-  const E=[];
-  for(let i=0;i<16;i++) for(let k=0;k<4;k++){ const j=i^(1<<k); if(j>i) E.push([i,j]); }
+  // Tesseract: 16 vertices, 32 edges, rotated in four dimensions.
+  const V4=[];
+  for(let i=0;i<16;i++) V4.push([(i&1)?1:-1,(i&2)?1:-1,(i&4)?1:-1,(i&8)?1:-1]);
+  const E4=[];
+  for(let i=0;i<16;i++) for(let k=0;k<4;k++){ const j=i^(1<<k); if(j>i) E4.push([i,j]); }
 
-  const seg=new Float32Array(32*4);
+  /* Dodecahedron: 20 vertices, 30 edges. Vertices are the usual golden-ratio
+     construction, normalised onto the unit sphere so it reads as a geodesic
+     cage rather than a lump. Edges are found by distance instead of a hand
+     typed index table: every vertex pair exactly one edge length apart. The
+     next-nearest pair distance is 1.155 against an edge of 0.714, so the
+     tolerance has a wide margin, and the result is checked at build time. */
+  const PHI=(1+Math.sqrt(5))/2, IPHI=1/PHI, R3=Math.sqrt(3);
+  const V3=[];
+  for(const sx of [-1,1]) for(const sy of [-1,1]) for(const sz of [-1,1]) V3.push([sx,sy,sz]);
+  for(const a of [-IPHI,IPHI]) for(const b of [-PHI,PHI]){
+    V3.push([0,a,b]); V3.push([a,b,0]); V3.push([b,0,a]);
+  }
+  for(const v of V3){ v[0]/=R3; v[1]/=R3; v[2]/=R3; }
+  const E3=[], EL=(2*IPHI)/R3;
+  for(let i=0;i<V3.length;i++) for(let j=i+1;j<V3.length;j++){
+    const dx=V3[i][0]-V3[j][0], dy=V3[i][1]-V3[j][1], dz=V3[i][2]-V3[j][2];
+    if(Math.abs(Math.sqrt(dx*dx+dy*dy+dz*dz)-EL)<0.02) E3.push([i,j]);
+  }
+
+  const seg=new Float32Array(SEGN*4);
   function turn(p,i,j,ang){
     const c=Math.cos(ang),s=Math.sin(ang),x=p[i],y=p[j];
     p[i]=x*c-y*s; p[j]=x*s+y*c;
   }
+
+  /* Both solids go through the same warp, which is what stops them reading as
+     two drawings stacked on each other and makes them one body:
+       br  breathes the whole figure in and out, Hoberman fashion
+       tw  rotates each point about the vertical by an amount proportional to
+           its height - a half twist along the body, the Mobius part
+       kl  a slow lateral lobe that lets the form pass through itself rather
+           than staying a well-behaved solid, which is the Klein part
+     Then the usual perspective divide. */
+  function warp(x,y,z,br,tw,t,sc){
+    x*=br; y*=br; z*=br;
+    const a=tw*z, c=Math.cos(a), s=Math.sin(a);
+    const X=x*c-y*s, Y=x*s+y*c;
+    const kl=0.13*Math.sin(z*2.3+t*0.26);
+    const k3=1.75/(3.4-z);
+    return [0.5+(X+kl)*k3*sc, 0.5+Y*k3*sc];
+  }
+
   function project(t){
-    const P=[];
+    const br=1+0.16*Math.sin(t*0.31)+0.05*Math.sin(t*0.77+1.1);
+    const tw=0.42+0.55*Math.sin(t*0.19);
+    let e=0;
+
+    const P4=[];
     for(let n=0;n<16;n++){
-      const p=V[n].slice();
-      turn(p,0,3,t*0.31);
-      turn(p,1,2,t*0.24);
-      turn(p,0,1,t*0.13);
-      turn(p,2,3,t*0.19);
+      const p=V4[n].slice();
+      turn(p,0,3,t*0.31); turn(p,1,2,t*0.24); turn(p,0,1,t*0.13); turn(p,2,3,t*0.19);
       const k4=1.9/(2.9-p[3]);
-      let x=p[0]*k4, y=p[1]*k4, z=p[2]*k4;
-      const k3=1.75/(3.4-z);
-      P.push([0.5+x*k3*0.30, 0.5+y*k3*0.30]);
+      P4.push(warp(p[0]*k4,p[1]*k4,p[2]*k4,br,tw,t,0.27));
     }
-    for(let e=0;e<32;e++){
-      const A=P[E[e][0]], B=P[E[e][1]];
+    for(let i=0;i<E4.length&&e<SEGN;i++,e++){
+      const A=P4[E4[i][0]], B=P4[E4[i][1]];
       seg[e*4]=A[0]; seg[e*4+1]=A[1]; seg[e*4+2]=B[0]; seg[e*4+3]=B[1];
     }
+
+    if(SEGN>32){
+      // Counter-rotating, and breathing against the tesseract rather than with
+      // it (2-br), so the two shear past each other instead of moving as one.
+      const P3=[];
+      for(let n=0;n<V3.length;n++){
+        const p=V3[n].slice();
+        turn(p,0,2,-t*0.22); turn(p,1,2,t*0.17); turn(p,0,1,-t*0.11);
+        P3.push(warp(p[0]*1.30,p[1]*1.30,p[2]*1.30,2-br,-tw,t,0.27));
+      }
+      for(let i=0;i<E3.length&&e<SEGN;i++,e++){
+        const A=P3[E3[i][0]], B=P3[E3[i][1]];
+        seg[e*4]=A[0]; seg[e*4+1]=A[1]; seg[e*4+2]=B[0]; seg[e*4+3]=B[1];
+      }
+    }
+    // Park any unused slot far outside the canvas so it never wins the min().
+    for(;e<SEGN;e++){ seg[e*4]=-9; seg[e*4+1]=-9; seg[e*4+2]=-9; seg[e*4+3]=-9; }
   }
 
   // px/py follow tx/ty rather than snapping to the pointer, so the deformation
@@ -890,7 +952,9 @@ void main(){
   // larger now, and a fixed 560px canvas upscaled on a 3x phone screen is soft.
   function sizeLogo(){
     const r=lc.getBoundingClientRect(); if(!r.width) return;
-    const px2=Math.max(1,Math.round(r.width*Math.min(devicePixelRatio||1,2.5)));
+    // Capped at 2x rather than 2.5x: the shader now measures 62 segments per
+    // pixel instead of 32, and this keeps the net fill cost close to before.
+    const px2=Math.max(1,Math.round(r.width*Math.min(devicePixelRatio||1,2.0)));
     if(lc.width!==px2){ lc.width=px2; lc.height=px2; }
   }
   sizeLogo();

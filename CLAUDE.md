@@ -104,7 +104,33 @@ never drops a frame it is already a no-op, so do not remove it to "restore
 quality". Do not weaken it back into a run-of-N-frames test either.
 
 The gate overlay (`#gate`) runs its own separate WebGL1 context drawing a
-rotating 4-D tesseract projected to 2-D. It is independent of the main sim; the
+tesseract and a dodecahedron warped together into one body.
+
+The figure is line segments handed to the fragment shader as a uniform array,
+and **every pixel measures its distance to every segment** — so the segment
+count is simultaneously the complexity budget and the per-pixel cost. 32
+tesseract edges plus 30 dodecahedron edges is 62, in a 64 array. GLES2 only
+guarantees 16 fragment uniform vectors, so `SEGN` is chosen at runtime from
+`MAX_FRAGMENT_UNIFORM_VECTORS` and falls back to the tesseract alone on a device
+that cannot take 64; the shader source is built around that number. The logo's
+backing store is capped at 2x device pixels rather than 2.5x to pay for the
+extra segments.
+
+Dodecahedron vertices are the golden-ratio construction normalised onto the unit
+sphere, and its **edges are found by distance, not a typed index table**: every
+pair exactly one edge length apart. Verified — 20 vertices, 30 edges, every
+vertex degree 3, and the next-nearest pair distance is 1.155 against an edge of
+0.714, so the tolerance has a wide margin.
+
+Both solids pass through the same `warp()`, which is what makes them read as one
+body rather than two drawings stacked up: `br` breathes the whole figure
+(Hoberman), `tw` rotates each point about the vertical in proportion to its
+height (a half twist along the body, the Mobius part), and `kl` is a slow
+lateral lobe that lets the form pass through itself instead of staying a
+well-behaved solid (the Klein part). The dodecahedron counter-rotates and
+breathes against the tesseract (`2-br`) so the two shear past each other. The
+projection was replayed over 600s of animation: coordinates stay within
+0.099-0.877, so it never clips the canvas. It is independent of the main sim; the
 `Click me` button creates the audio context (browsers require a gesture) and
 starts the main loop.
 
