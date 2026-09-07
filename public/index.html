@@ -67,9 +67,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 #gate{position:fixed;inset:0;z-index:20;background:#000;display:flex;
   align-items:center;justify-content:center;overflow-y:auto;
   padding:calc(18px + env(safe-area-inset-top)) 20px calc(18px + env(safe-area-inset-bottom));
-  text-align:center;font-family:"Courier Prime",monospace;color:#EDE6D5}
+  text-align:center;font-family:"Courier Prime",monospace;color:#EDE6D5;
+  touch-action:none}
 #gwrap{display:flex;flex-direction:column;align-items:center;width:100%;margin:auto;
-  gap:clamp(13px,2.6vh,24px)}
+  gap:clamp(13px,2.6vh,24px);position:relative;z-index:1}
 #gate h1{font-family:"Saira Condensed",sans-serif;font-weight:900;
   font-size:clamp(40px,13vw,80px);line-height:.86;text-transform:uppercase;margin:0}
 #gate h1 small{display:block;font-size:.38em;letter-spacing:.18em;color:#BCA9F0;margin-top:14px}
@@ -81,13 +82,21 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
    and floats at the top of the viewport, overlapping the title — which is also
    why its old margin-bottom did nothing. In flow, growing it genuinely pushes
    the rest of the stack down. */
-/* No filter here on purpose. A drop-shadow glows in ONE fixed colour whatever
+/* Full bleed. The canvas covers the whole gate so the figure can grow past
+   where it sits at rest and pass over the words, instead of being clipped into
+   a box at the edge of a small canvas. #logospace reserves the resting
+   footprint so the heading below still sits where it did, and the canvas is out
+   of flow with pointer-events:none so it never swallows a tap meant for the
+   button underneath — the gate handles the gestures instead.
+
+   No filter here on purpose. A drop-shadow glows in ONE fixed colour whatever
    the lines are actually doing, and spreads it across ~130px of background, so
-   the black stops being black. The tesseract's glow belongs to the tesseract:
-   the fragment shader's own halo (exp(-m*26.0)) already emits in each line's
-   current colour and falls off tightly. Do not add a filter back. */
-#logo{position:static;width:min(76vw,300px);height:auto;aspect-ratio:1;display:block;
-  flex:0 0 auto;margin:0 auto clamp(2px,1.2vh,14px);touch-action:none;cursor:grab}
+   the black stops being black. The glow belongs to the figure: the fragment
+   shader's own halo already emits in each line's current colour. */
+#logo{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:3;
+  pointer-events:none;touch-action:none}
+#logospace{width:min(76vw,300px);aspect-ratio:1;flex:0 0 auto;
+  margin:0 auto clamp(2px,1.2vh,14px)}
 #gate button{font-family:"Saira Condensed",sans-serif;font-weight:900;font-size:29px;
   letter-spacing:.16em;text-transform:uppercase;background:#9E2A1A;color:#FFF3DC;
   border:3px solid #D14A33;padding:17px 54px;cursor:pointer;min-height:60px}
@@ -95,7 +104,7 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 
 
 @media (max-height:700px){
-  #logo{width:min(46vw,172px)}
+  #logospace{width:min(46vw,172px)}
   #gate h1{font-size:clamp(33px,9.5vw,53px)}
   #hint{font-size:14px;line-height:1.5}
   #gate button{font-size:25px;padding:14px 44px;min-height:52px}
@@ -126,8 +135,9 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
   </button>
 </div>
 <div id="gate">
+ <canvas id="logo"></canvas>
  <div id="gwrap">
-  <canvas id="logo" width="560" height="560"></canvas>
+  <div id="logospace"></div>
   <h1>Are You<br>Tripping?<small>You don't have to be</small></h1>
   <p id="hint">Inside, two buttons sit in the corner: one <b>mutes the tones</b>,
      the other <b>stops the words</b>.</p>
@@ -750,13 +760,17 @@ function frame(now){
   const MAXV=lg.getParameter(lg.MAX_FRAGMENT_UNIFORM_VECTORS)||16;
   const SEGN=MAXV>=80?64:32;
 
-  const LVS='attribute vec2 p;varying vec2 v;void main(){v=p*0.5+0.5;gl_Position=vec4(p,0.,1.);}';
+  /* The canvas is the whole viewport now, but the figure only occupies part of
+     it, so the quad is scaled to the figure's reach rather than covering the
+     screen. Without this every pixel on the page would run the 62-segment loop. */
+  const LVS='attribute vec2 p;varying vec2 v;uniform vec2 uQC,uQH;'
+          + 'void main(){vec2 c=uQC+p*uQH;v=c*0.5+0.5;gl_Position=vec4(c,0.,1.);}';
   const LFS=`
 precision highp float;
 varying vec2 v;
 uniform vec4 uSeg[${SEGN}];
-uniform float uT, uHeat, uOn;
-uniform vec2 uP;
+uniform float uT, uHeat, uOn, uReach;
+uniform vec2 uP, uCen, uHalf;
 
 vec3 spectral(float w){
   vec3 c;
@@ -790,7 +804,11 @@ float segd(vec2 p, vec2 a, vec2 b){
 }
 
 void main(){
-  vec2 uv=v;
+  /* v is where we are on the full-viewport canvas; uv is where that lands in
+     the figure's own square, which is what every measurement below expects.
+     Outside the figure's reach nothing can light up, so bail before the loop. */
+  vec2 uv=(v-uCen)/(2.0*uHalf)+0.5;
+  if(length(uv-0.5)>uReach) discard;
   float t=uT*0.095;
 
   vec2 q=vec2(fbm(uv*3.1+t), fbm(uv*3.1+vec2(5.2,1.3)-t));
@@ -847,7 +865,9 @@ void main(){
 
   const uSeg=lg.getUniformLocation(pr,'uSeg'), uT=lg.getUniformLocation(pr,'uT'),
         uHeat=lg.getUniformLocation(pr,'uHeat'), uP=lg.getUniformLocation(pr,'uP'),
-        uOn=lg.getUniformLocation(pr,'uOn');
+        uOn=lg.getUniformLocation(pr,'uOn'), uCen=lg.getUniformLocation(pr,'uCen'),
+        uHalf=lg.getUniformLocation(pr,'uHalf'), uReach=lg.getUniformLocation(pr,'uReach'),
+        uQC=lg.getUniformLocation(pr,'uQC'), uQH=lg.getUniformLocation(pr,'uQH');
 
   lg.enable(lg.BLEND);
   lg.blendFunc(lg.ONE,lg.ONE_MINUS_SRC_ALPHA);
@@ -939,10 +959,16 @@ void main(){
   // px/py follow tx/ty rather than snapping to the pointer, so the deformation
   // trails the finger like a fluid instead of teleporting with it.
   let px=0.5,py=0.5,tx=0.5,ty=0.5,on=0,heat=0,held=false,hoverUntil=0;
+  /* frame is the figure's resting box on screen, in CSS pixels, read off the
+     #logospace placeholder. The canvas is the whole viewport, so this is what
+     tells both the pointer maths and the shader where the figure actually is. */
+  const spacer=document.getElementById('logospace');
+  const surf=document.getElementById('gate');
+  const frame={cx:0,cy:0,size:1};
   function at(e){
-    const rc=lc.getBoundingClientRect(); if(!rc.width) return;
-    tx=(e.clientX-rc.left)/rc.width;
-    ty=1.0-(e.clientY-rc.top)/rc.height;
+    if(!frame.size) return;
+    tx=(e.clientX-(frame.cx-frame.size/2))/frame.size;
+    ty=1.0-(e.clientY-(frame.cy-frame.size/2))/frame.size;
   }
 
   /* Two fingers pinch the figure bigger or smaller. Every live pointer is
@@ -959,15 +985,17 @@ void main(){
   }
   function pinchStart(){ const d=spread(); if(d>8) pinchBase={d:d,z:zoomT}; }
 
-  lc.addEventListener('pointerdown',e=>{
+  // Bound to the gate, not the canvas: the canvas is pointer-events:none so the
+  // button stays tappable, and the gate covers the screen anyway. Deliberately
+  // no setPointerCapture — capturing here would retarget the CLICK ME click.
+  surf.addEventListener('pointerdown',e=>{
     lptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
     held=true; at(e);
-    try{ lc.setPointerCapture(e.pointerId); }catch(_){}
     if(lptr.size===2) pinchStart();
   });
   // Hover used to shove `on` up with Math.max every move, which fought the
   // easing and jittered. A decaying deadline lets it ease both ways instead.
-  lc.addEventListener('pointermove',e=>{
+  surf.addEventListener('pointermove',e=>{
     if(lptr.has(e.pointerId)) lptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(lptr.size>=2){
       // Pinching: drive zoom, and leave the warp point where it was so the
@@ -977,8 +1005,8 @@ void main(){
     }
     at(e); if(!held) hoverUntil=performance.now()+420;
   });
-  ['pointerup','pointercancel','lostpointercapture'].forEach(k=>
-    lc.addEventListener(k,e=>{
+  ['pointerup','pointercancel','pointerleave'].forEach(k=>
+    surf.addEventListener(k,e=>{
       if(e&&e.pointerId!=null) lptr.delete(e.pointerId);
       if(lptr.size===2) pinchStart(); else pinchBase=null;
       if(lptr.size===0) held=false;
@@ -987,17 +1015,21 @@ void main(){
   // Match the backing store to the element's real pixel size. The logo is much
   // larger now, and a fixed 560px canvas upscaled on a 3x phone screen is soft.
   function sizeLogo(){
-    const r=lc.getBoundingClientRect(); if(!r.width) return;
-    // Capped at 2x rather than 2.5x: the shader now measures 62 segments per
-    // pixel instead of 32, and this keeps the net fill cost close to before.
-    const px2=Math.max(1,Math.round(r.width*Math.min(devicePixelRatio||1,2.0)));
-    if(lc.width!==px2){ lc.width=px2; lc.height=px2; }
+    // Backing store follows the viewport, capped at 2x device pixels. Only the
+    // quad around the figure is ever rasterised, so this is cheap despite the
+    // canvas being full screen.
+    const d=Math.min(devicePixelRatio||1,2.0);
+    const w=Math.max(1,Math.round(innerWidth*d)), h=Math.max(1,Math.round(innerHeight*d));
+    if(lc.width!==w||lc.height!==h){ lc.width=w; lc.height=h; }
+    const r=spacer.getBoundingClientRect();
+    if(r.width){ frame.cx=r.left+r.width/2; frame.cy=r.top+r.height/2; frame.size=r.width; }
   }
   sizeLogo();
   addEventListener('resize',()=>{clearTimeout(window.__lr);window.__lr=setTimeout(sizeLogo,180);});
   // The gate is laid out with a webfont; re-measure once it lands.
   if(document.fonts&&document.fonts.ready) document.fonts.ready.then(sizeLogo).catch(()=>{});
   setTimeout(sizeLogo,600); setTimeout(sizeLogo,2000);
+  surf.addEventListener('scroll',sizeLogo,{passive:true});
 
   // Rotation is INTEGRATED as a phase, not derived from absolute time.
   //
@@ -1015,6 +1047,11 @@ void main(){
   const T0=performance.now();
   let phase=0,last=T0;
   (function tick(now){
+    // The gate never comes back once dismissed, so stop here rather than keep
+    // shading a hidden full-screen canvas underneath the main simulation. This
+    // loop used to run for the entire session.
+    if(surf.classList.contains('gone')) return;
+
     const dt=Math.min(0.05,(now-last)/1000); last=now;
     const t=(now-T0)/1000;
 
@@ -1036,6 +1073,19 @@ void main(){
     lg.uniform4fv(uSeg,seg);
     lg.uniform1f(uT,t); lg.uniform1f(uHeat,heat); lg.uniform1f(uOn,on);
     lg.uniform2f(uP,px,py);
+
+    /* Where the figure sits on the full-viewport canvas, and how far it can
+       reach from its centre once zoomed. The quad is sized to that reach:
+       a figure-space offset of `reach` is `reach*2*half` in canvas uv, and
+       twice that again in clip space. */
+    const vw=innerWidth||1, vh=innerHeight||1;
+    const cx=frame.cx/vw, cy=1-frame.cy/vh;
+    const hx=(frame.size*0.5)/vw, hy=(frame.size*0.5)/vh;
+    const reach=0.40*zoom+0.16;
+    lg.uniform2f(uCen,cx,cy); lg.uniform2f(uHalf,hx,hy);
+    lg.uniform1f(uReach,reach);
+    lg.uniform2f(uQC,2.0*cx-1.0,2.0*cy-1.0);
+    lg.uniform2f(uQH,4.0*reach*hx,4.0*reach*hy);
     lg.drawArrays(lg.TRIANGLES,0,3);
     requestAnimationFrame(tick);
   })(performance.now());

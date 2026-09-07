@@ -132,6 +132,25 @@ breathes against the tesseract (`2-br`) so the two shear past each other. The
 projection was replayed over 600s of animation: coordinates stay within
 0.099-0.877 at rest, so it never clips the canvas unless pinched.
 
+**The logo canvas is full bleed and out of flow.** It is `position:fixed` over
+the whole gate at `z-index:3`, above the text, with `#logospace` holding the
+resting footprint in `#gwrap` so the heading still sits where it did. That is
+what lets the figure grow past its resting size and run off the screen edge
+instead of being clipped into a box. Three things hold it together and are easy
+to break:
+
+- `pointer-events:none` on the canvas, and the gestures bound to `#gate`
+  instead, or a full-screen canvas would swallow every tap meant for CLICK ME.
+- **No `setPointerCapture`.** Capturing on the gate retargets the button's
+  click and the gate stops opening.
+- The shader maps canvas uv into the figure's own square via `uCen`/`uHalf`
+  read off `#logospace`, and the vertex shader scales the quad to `uReach`
+  rather than covering the screen. Without that scaling every pixel on the page
+  would run the 62-segment loop.
+
+**The logo loop stops when the gate is dismissed.** It used to keep shading a
+hidden full-screen canvas underneath the main simulation for the entire session.
+
 **Two fingers pinch it larger or smaller.** Every live pointer on `#logo` is
 tracked in `lptr` so the gesture can be told apart from a one-finger drag; zoom
 is measured against the finger spread at the moment the second finger landed, so
