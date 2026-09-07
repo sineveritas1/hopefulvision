@@ -154,7 +154,7 @@ if(!gl){
    +'<p style="font-size:17px;margin-bottom:16px">The graphics could not start.</p>'
    +'<p style="font-size:13px;opacity:.72;margin-bottom:12px">If this was working a moment ago, '
    +'the browser shut its GPU down and will not bring it back for this tab. '
-   +'<b>Reloading will not help — fully quit the browser and reopen it.</b></p>'
+   +'<b>Reloading will not help. Fully quit the browser and reopen it.</b></p>'
    +'<p style="font-size:13px;opacity:.72;margin-bottom:24px">Otherwise this device or browser '
    +'has no WebGL2.</p>'
    +'<button id="retry" style="font-family:\'Saira Condensed\',sans-serif;font-weight:900;'
@@ -625,6 +625,7 @@ const uR=U(pRing,['uPtr','uSd','uAspect','uPxScale','uT','uTv']);
 const uF=U(pFade,['uSrc','uRes','uK']);
 const uO=U(pPost,['uSrc','uRes','uT']);
 
+const PTRXYP=new Float32Array(30), PTRSEED=new Float32Array(10);
 let t0=performance.now(),last=t0,running=false;
 
 /* A lost context is the difference between a blip and a dead page.
@@ -650,7 +651,7 @@ cv.addEventListener('webglcontextrestored',function(){
    the crash this is here to avoid.
    q stays at 1 and nothing changes on hardware that keeps up; it only backs off
    after ~45 sustained slow frames, and creeps back up as soon as they recover. */
-let slowN=0, q=1;
+let slowN=0, hotN=0, q=1;
 const MRT=[gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1];
 
 function frame(now){
@@ -667,11 +668,21 @@ function frame(now){
   // waiting for 45 of them takes nine seconds, which IS the freeze. One bad
   // frame now cuts q straight away, and recovery is deliberately slow so it
   // settles instead of oscillating around the threshold.
-  if(ms>100){ q=Math.max(0.35,q*0.65); slowN=0; }
-  else if(ms>34){ if(++slowN>=12){ q=Math.max(0.35,q-0.10); slowN=0; } }
-  else { if(slowN>0) slowN--; else if(q<1) q=Math.min(1,q+0.0010); }
+  // One slow frame is usually somebody else's fault — a GC pause, the browser
+  // doing work, the phone throttling — and none of those get better by shrinking
+  // sprites. Cutting on a single frame just degrades the picture permanently for
+  // a cause it cannot fix, so the emergency cut needs two slow frames running and
+  // takes less when it fires. Sustained mild slowness is still handled below.
+  if(ms>100){ if(++hotN>=2){ q=Math.max(0.4,q*0.75); hotN=0; } }
+  else {
+    hotN=0;
+    if(ms>34){ if(++slowN>=12){ q=Math.max(0.4,q-0.08); slowN=0; } }
+    else { if(slowN>0) slowN--; else if(q<1) q=Math.min(1,q+0.0010); }
+  }
 
-  const arr=new Float32Array(30), sds=new Float32Array(10); let n=0,mx=0;
+  // Reused, not reallocated. These were two fresh typed arrays every frame,
+  // ~120 allocations a second feeding the collector for no reason.
+  const arr=PTRXYP, sds=PTRSEED; arr.fill(0); sds.fill(0); let n=0,mx=0;
   ptrs.forEach(v=>{ if(n<10){arr[n*3]=v.x;arr[n*3+1]=v.y;arr[n*3+2]=v.p;sds[n]=v.s;n++;mx=Math.max(mx,v.p);} });
 
   gl.useProgram(pSim); bindQuad(pSim);
