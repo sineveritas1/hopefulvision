@@ -110,6 +110,15 @@ starts the main loop.
 
 Two things about the gate are easy to break:
 
+- **No CSS `filter` on `#logo`, and the page is true `#000`.** A drop-shadow
+  glows in one fixed colour whatever the lines are doing, and spreads it over
+  ~130px of background, so the black stops being black — on an OLED phone those
+  pixels are lit and the whole gate reads as a purple haze. The tesseract's glow
+  belongs to the tesseract: the fragment shader's own halo, `exp(-m*26.0)`,
+  already emits in each line's current colour and falls off tightly. The page,
+  body, `#gate` and `theme-color` are `#000` rather than the old `#0b0a08` for
+  the same reason. The icon data URIs still carry `#0b0a08` and should stay that
+  way — that is the favicon's own background, not the page's.
 - **The logo canvas must stay `position:static`.** The global `canvas` rule pins
   every canvas to `position:fixed;inset:0` for the fullscreen sim. Without the
   explicit override, `#logo` leaves the flex flow and floats at the top of the
