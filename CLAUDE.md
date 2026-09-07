@@ -81,14 +81,27 @@ message says so and says to restart the browser, because reloading genuinely
 cannot fix that state. The old message, "This needs WebGL2.", was a dead end
 that misdescribed the usual cause.
 
-`q` is the adaptive guard against provoking that in the first place. Particle
-sprite size grows with "heat", and every pointer injects heat, so ten fingers
-held down inflate a large fraction of the 262144 sprites at once and fill rate
-climbs steeply; a phone GPU that misses its driver watchdog deadline has its
-context killed. `q` stays at 1 and changes nothing on hardware that keeps up,
-backing off only after ~45 sustained slow frames and recovering as soon as they
-do. Do not remove it to "restore quality" — on a device that never drops frames
-it is already a no-op.
+`q` is the adaptive guard on particle sprite size, and it exists because of a
+specific, measured failure mode: **the page freezes about eleven seconds into a
+sustained press.**
+
+The cause is a ramp, not a spike. `heat` decays as `exp(-uDt*0.20)` — a five
+second time constant — so a held finger keeps raising heat across the field for
+ten to fifteen seconds before it plateaus. `gl_PointSize` scales by
+`(1.0+1.5*heat)`, and cost follows sprite *area*, so that ramp grows the fill
+load by up to 10.6x. Eleven seconds is roughly 2.2 time constants, i.e. ~89% of
+the way to saturation, which is where a phone crosses from keeping up to not.
+
+The first version of this guard waited for 45 consecutive frames slower than
+34ms. That is useless here: once frames are 200ms, 45 of them is nine seconds,
+which is the freeze itself. It now cuts `q` on a *single* frame over 100ms, eases
+down on a short run of milder ones, and recovers slowly so it settles rather
+than oscillating. Modelled against the heat ramp above, at the eleven second
+mark the old form left frames at 111ms and the new one holds 26ms.
+
+`q` stays at 1 and changes nothing on hardware that keeps up — on a device that
+never drops a frame it is already a no-op, so do not remove it to "restore
+quality". Do not weaken it back into a run-of-N-frames test either.
 
 The gate overlay (`#gate`) runs its own separate WebGL1 context drawing a
 rotating 4-D tesseract projected to 2-D. It is independent of the main sim; the

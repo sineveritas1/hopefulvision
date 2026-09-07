@@ -626,9 +626,20 @@ const MRT=[gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1];
 function frame(now){
   if(!running) return;
   const t=(now-t0)/1000, dt=Math.min(0.05,(now-last)/1000), ms=now-last; last=now;
-  if(ms>34) slowN=Math.min(90,slowN+1); else slowN=Math.max(0,slowN-1);
-  if(slowN>=45&&q>0.5){ q=Math.max(0.5,q-0.06); slowN=0; }
-  else if(slowN===0&&q<1) q=Math.min(1,q+0.0015);
+  // Frame cost here is dominated by particle sprite AREA, and sprite size scales
+  // with "heat" — which has a five second time constant (exp(-uDt*0.20) in the
+  // sim shader). So a sustained press does not load the GPU all at once: it
+  // keeps inflating every sprite for ten to fifteen seconds, growing area by up
+  // to 10.6x, before plateauing. That ramp is the ~11s freeze — the load crosses
+  // what the device can hold and frames stretch into hundreds of milliseconds.
+  //
+  // Reacting to a RUN of slow frames cannot help with that: at 200ms a frame,
+  // waiting for 45 of them takes nine seconds, which IS the freeze. One bad
+  // frame now cuts q straight away, and recovery is deliberately slow so it
+  // settles instead of oscillating around the threshold.
+  if(ms>100){ q=Math.max(0.35,q*0.65); slowN=0; }
+  else if(ms>34){ if(++slowN>=12){ q=Math.max(0.35,q-0.10); slowN=0; } }
+  else { if(slowN>0) slowN--; else if(q<1) q=Math.min(1,q+0.0010); }
 
   const arr=new Float32Array(30), sds=new Float32Array(10); let n=0,mx=0;
   ptrs.forEach(v=>{ if(n<10){arr[n*3]=v.x;arr[n*3+1]=v.y;arr[n*3+2]=v.p;sds[n]=v.s;n++;mx=Math.max(mx,v.p);} });
