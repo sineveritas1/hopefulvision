@@ -1003,10 +1003,16 @@ void main(){
   const spacer=document.getElementById('logospace');
   const surf=document.getElementById('gate');
   const frame={cx:0,cy:0,size:1};
+  // Where the figure has been dragged to, in CSS pixels off its resting spot.
+  const pan={x:0,y:0}, panT={x:0,y:0};
+  const clamp=(v,lo,hi)=>v<lo?lo:(v>hi?hi:v);
+
   function at(e){
     if(!frame.size) return;
-    tx=(e.clientX-(frame.cx-frame.size/2))/frame.size;
-    ty=1.0-(e.clientY-(frame.cy-frame.size/2))/frame.size;
+    // Measured against where the figure actually IS, not where it rests, so the
+    // deformation stays under the finger after it has been dragged.
+    tx=(e.clientX-((frame.cx+pan.x)-frame.size/2))/frame.size;
+    ty=1.0-(e.clientY-((frame.cy+pan.y)-frame.size/2))/frame.size;
   }
 
   /* Two fingers pinch the figure bigger or smaller. Every live pointer is
@@ -1016,12 +1022,24 @@ void main(){
      release, the way pinch-zoom does everywhere else.
      #logo carries touch-action:none, so the browser's own pinch never competes. */
   const lptr=new Map();
-  let zoom=1, zoomT=1, pinchBase=null;
+  let zoom=1, zoomT=1, pinchBase=null, lastC=null;
   function spread(){
     const a=Array.from(lptr.values());
     return a.length<2?0:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
   }
   function pinchStart(){ const d=spread(); if(d>8) pinchBase={d:d,z:zoomT}; }
+
+  /* Dragging is driven by the CENTROID of whatever is currently down, which is
+     what lets one finger carry the figure around and two fingers carry it while
+     also pinching, with no separate code path for either. The centroid is
+     re-seeded whenever a finger lands or lifts — otherwise the jump in the
+     average as the count changes would fling the figure across the screen. */
+  function centroid(){
+    const a=Array.from(lptr.values());
+    if(!a.length) return null;
+    let x=0,y=0; for(const q of a){ x+=q.x; y+=q.y; }
+    return {x:x/a.length, y:y/a.length};
+  }
 
   // Bound to the gate, not the canvas: the canvas is pointer-events:none so the
   // button stays tappable, and the gate covers the screen anyway. Deliberately
@@ -1029,15 +1047,28 @@ void main(){
   surf.addEventListener('pointerdown',e=>{
     lptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
     held=true; at(e);
+    lastC=centroid();
     if(lptr.size===2) pinchStart();
   });
   // Hover used to shove `on` up with Math.max every move, which fought the
   // easing and jittered. A decaying deadline lets it ease both ways instead.
   surf.addEventListener('pointermove',e=>{
     if(lptr.has(e.pointerId)) lptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+
+    if(lptr.size>0){
+      const c=centroid();
+      if(lastC){
+        // Bounded so it can be carried well off centre but never lost entirely
+        // off screen with no way to see where it went.
+        panT.x=clamp(panT.x+(c.x-lastC.x), -innerWidth*0.55,  innerWidth*0.55);
+        panT.y=clamp(panT.y+(c.y-lastC.y), -innerHeight*0.42, innerHeight*0.42);
+      }
+      lastC=c;
+    }
+
     if(lptr.size>=2){
-      // Pinching: drive zoom, and leave the warp point where it was so the
-      // figure does not also lurch toward whichever finger moved last.
+      // Pinching as well: drive zoom, and leave the warp point where it was so
+      // the figure does not also lurch toward whichever finger moved last.
       if(pinchBase) zoomT=Math.max(0.6,Math.min(2.2,pinchBase.z*spread()/pinchBase.d));
       return;
     }
@@ -1046,10 +1077,13 @@ void main(){
   ['pointerup','pointercancel','pointerleave'].forEach(k=>
     surf.addEventListener(k,e=>{
       if(e&&e.pointerId!=null) lptr.delete(e.pointerId);
+      lastC=centroid();
       // Dropping below two fingers ends the pinch and releases the zoom back to
       // rest. It is only held while the gesture is actually being made.
       if(lptr.size===2) pinchStart(); else { pinchBase=null; zoomT=1; }
-      if(lptr.size===0) held=false;
+      // The last finger up sends the figure home too, so the gate always
+      // settles back to its composed layout.
+      if(lptr.size===0){ held=false; panT.x=0; panT.y=0; }
     }));
 
   // Match the backing store to the element's real pixel size. The logo is much
@@ -1107,6 +1141,11 @@ void main(){
     // Tracks the fingers briskly while pinching, then settles back more gently
     // once they lift, so the return reads as a spring rather than a snap.
     zoom += (zoomT-zoom)*(1-Math.exp(-dt*(pinchBase?11:4.5)));
+    // Near enough 1:1 with the finger while dragging; the same gentle spring as
+    // the zoom on the way home.
+    const panRate=lptr.size?20:4.5;   // NB: not `pr` — that is the shader program
+    pan.x += (panT.x-pan.x)*(1-Math.exp(-dt*panRate));
+    pan.y += (panT.y-pan.y)*(1-Math.exp(-dt*panRate));
     project(phase,zoom);
 
     lg.viewport(0,0,lc.width,lc.height);
@@ -1121,7 +1160,7 @@ void main(){
        a figure-space offset of `reach` is `reach*2*half` in canvas uv, and
        twice that again in clip space. */
     const vw=innerWidth||1, vh=innerHeight||1;
-    const cx=frame.cx/vw, cy=1-frame.cy/vh;
+    const cx=(frame.cx+pan.x)/vw, cy=1-(frame.cy+pan.y)/vh;
     const hx=(frame.size*0.5)/vw, hy=(frame.size*0.5)/vh;
     const reach=0.40*zoom+0.16;
     lg.uniform2f(uCen,cx,cy); lg.uniform2f(uHalf,hx,hy);

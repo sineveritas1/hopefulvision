@@ -166,6 +166,27 @@ so it takes about 0.7s at 60fps regardless of frame rate. Measured through a
 probe build: 1 -> 2.07 pinched out -> back to 1.03, and 0.60 pinched in -> back
 to 0.996.
 
+**A finger down drags the figure around.** Pan is driven by the CENTROID of
+whatever is currently down, which is what lets one finger carry the figure and
+two fingers carry it *while also pinching*, with no separate code path for
+either. `lastC` is re-seeded on every landing and lifting — without that, the
+jump in the average as the finger count changes flings the figure across the
+screen. Both re-seeds are covered by tests. Pan tracks near 1:1 while dragging
+(rate 20) and springs home on the same gentle rate as the zoom once the last
+finger lifts, so the gate always settles back to its composed layout. It is
+bounded to about half the viewport so it can be carried well off centre but
+never lost with no way to find it.
+
+`at()` measures the warp point against where the figure *is* — `frame` plus
+`pan` — not where it rests, or the deformation would detach from the finger
+once the figure had been dragged.
+
+**Beware `pr` in the logo IIFE: it is the shader program.** A local named `pr`
+for the pan easing rate shadowed it, `lg.useProgram(pr)` was handed a number,
+and the throw killed the render loop *and* the rest of the script — the gate
+never opened. This file is deliberately terse, so check a short name is free
+before reusing it.
+
 While two fingers are down the warp point is left alone, or the figure would
 also lurch toward whichever finger moved last. `touch-action:none` is what stops
 the browser's own pinch competing. Zoomed past about 1.7 the figure runs off the
