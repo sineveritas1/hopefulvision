@@ -334,8 +334,8 @@ step), uploads `public/`, and serves it at hopeful.vision. Pull requests get
 their own preview URL.
 
 There is no deploy script to run and no secret to hold. If a deploy needs to be
-inspected, it is in the Cloudflare dashboard under Workers & Pages →
-trippingtoy → Deployments.
+inspected, it is in the Cloudflare dashboard under Workers & Pages, under the
+Pages project (still named `trippingtoy` — see wrangler.toml) → Deployments.
 
 ## Caching
 

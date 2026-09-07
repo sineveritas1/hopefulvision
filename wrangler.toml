@@ -9,9 +9,13 @@
 #
 # See CLAUDE.md -> "Growing the backend" for the exact commands.
 
-# The Cloudflare Pages PROJECT name, not the domain. It stays "trippingtoy"
-# even though the site is now hopeful.vision — renaming it here would not rename
-# the project, it would just stop matching the one that exists.
+# THE ONE PLACE THE OLD NAME SURVIVES, and it has to.
+#
+# This is the Cloudflare Pages PROJECT name, not the domain. It must match the
+# project that exists or the build stops matching it. Cloudflare Pages projects
+# cannot be renamed — moving off this name means creating a new project and
+# re-pointing every custom domain at it, which is not worth doing to hide a
+# string that only ever appears in the dashboard and in *.pages.dev.
 name = "trippingtoy"
 compatibility_date = "2025-09-06"
 

@@ -1,8 +1,8 @@
 {
-  "name": "trippingtoy",
+  "name": "hopeful-vision",
   "version": "1.0.0",
   "private": true,
-  "description": "Are You Tripping? — a WebGL2 particle toy at trippingtoy.com",
+  "description": "Hopeful Vision: a WebGL2 particle toy at hopeful.vision",
   "scripts": {
     "dev": "wrangler pages dev",
     "deploy": "wrangler pages deploy",
