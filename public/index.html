@@ -38,15 +38,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;overscroll-beha
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .hud b{color:rgba(255,240,200,.72);font-weight:700}
 #snd{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:6;
-  opacity:.62;transition:opacity .35s ease}
+  display:flex;gap:10px;opacity:.62;transition:opacity .35s ease}
 #snd:hover,#snd.live{opacity:1}
-#mute{background:transparent;border:1px solid rgba(244,236,218,.42);
+#snd button{background:transparent;border:1px solid rgba(244,236,218,.42);
   width:44px;height:44px;padding:0;cursor:pointer;border-radius:0;
   display:flex;align-items:center;justify-content:center;color:rgba(244,236,218,.92)}
-#mute svg{width:22px;height:22px;display:block}
-#mute .slash{opacity:0;transition:opacity .18s ease}
-#mute.off{color:rgba(244,236,218,.52);border-color:rgba(244,236,218,.22)}
-#mute.off .slash{opacity:1}
+#snd button svg{width:22px;height:22px;display:block}
+#snd button .slash{opacity:0;transition:opacity .18s ease}
+#snd button.off{color:rgba(244,236,218,.52);border-color:rgba(244,236,218,.22)}
+#snd button.off .slash{opacity:1}
+/* Words off hides the overlay outright; the cycle keeps running but paints
+   nothing, so turning them back on picks up at the next aphorism. */
+#glyph.hushed{display:none}
 #glyph{position:fixed;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;
   pointer-events:none;padding:9vw;text-align:center}
 #glyph span{font-family:"Courier Prime",monospace;font-weight:700;font-size:clamp(18px,5.2vw,29px);line-height:1.5;max-width:15em;
@@ -56,6 +59,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
   transition:opacity 5s ease,transform 10s ease;
   will-change:opacity,transform;backface-visibility:hidden}
 #glyph span.on{opacity:1;transform:translateY(0) scale(1)}
+#glyph span i{display:block;margin-top:16px;font-style:normal;font-size:.70em;
+  line-height:1.5;color:rgba(255,248,232,.62)}
 /* The gate scrolls if it must, but #gwrap carries margin:auto so that a tall
    stack stays centred without the top being clipped, which is what happens to
    an overflowing flex child under justify-content:center. */
@@ -66,8 +71,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 #gwrap{display:flex;flex-direction:column;align-items:center;width:100%;margin:auto;
   gap:clamp(13px,2.6vh,24px)}
 #gate h1{font-family:"Saira Condensed",sans-serif;font-weight:900;
-  font-size:clamp(32px,10.2vw,64px);line-height:.86;text-transform:uppercase;margin:0}
-#gate h1 small{display:block;font-size:.30em;letter-spacing:.20em;color:#BCA9F0;margin-top:12px}
+  font-size:clamp(38px,12.5vw,78px);line-height:.86;text-transform:uppercase;margin:0}
+#gate h1 small{display:block;font-size:.32em;letter-spacing:.20em;color:#BCA9F0;margin-top:13px}
+#hint{margin:0;max-width:23em;font-size:clamp(12.5px,3.5vw,15px);line-height:1.65;
+  letter-spacing:.05em;color:rgba(237,230,213,.56)}
+#hint b{color:rgba(255,248,232,.82);font-weight:400}
 /* The global canvas rule above pins every canvas to position:fixed;inset:0 for
    the fullscreen sim. The logo must opt out of that or it leaves the flex flow
    and floats at the top of the viewport, overlapping the title — which is also
@@ -76,16 +84,17 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 #logo{position:static;width:min(76vw,300px);height:auto;aspect-ratio:1;display:block;
   flex:0 0 auto;margin:0 auto clamp(2px,1.2vh,14px);touch-action:none;cursor:grab;
   filter:drop-shadow(0 0 44px rgba(168,150,224,.36))}
-#gate button{font-family:"Saira Condensed",sans-serif;font-weight:900;font-size:23px;
+#gate button{font-family:"Saira Condensed",sans-serif;font-weight:900;font-size:26px;
   letter-spacing:.16em;text-transform:uppercase;background:#9E2A1A;color:#FFF3DC;
-  border:3px solid #D14A33;padding:15px 46px;cursor:pointer;min-height:52px}
+  border:3px solid #D14A33;padding:16px 50px;cursor:pointer;min-height:56px}
 #gate.gone{display:none}
 
 
 @media (max-height:700px){
-  #logo{width:min(52vw,196px)}
-  #gate h1{font-size:clamp(27px,7.6vw,42px)}
-  #gate button{font-size:20px;padding:13px 38px;min-height:46px}
+  #logo{width:min(50vw,188px)}
+  #gate h1{font-size:clamp(31px,9vw,50px)}
+  #hint{font-size:12px;line-height:1.55}
+  #gate button{font-size:22px;padding:13px 40px;min-height:48px}
 }
 </style>
 </head>
@@ -93,6 +102,15 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 <canvas id="c"></canvas>
 <div id="glyph"><span id="gtext"></span></div>
 <div id="snd">
+  <button id="words" aria-label="Hide words" aria-pressed="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4.6 7.6h14.8"/>
+      <path d="M4.6 12h14.8"/>
+      <path d="M4.6 16.4h8.8"/>
+      <path class="slash" d="M4.4 4.4 19.6 19.6"/>
+    </svg>
+  </button>
   <button id="mute" aria-label="Mute" aria-pressed="false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -107,6 +125,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
  <div id="gwrap">
   <canvas id="logo" width="560" height="560"></canvas>
   <h1>Are You<br>Tripping?<small>You don't have to be</small></h1>
+  <p id="hint">Two buttons sit in the bottom corner once you're inside —
+     one <b>mutes the tones</b>, the other <b>stops the words</b> appearing.</p>
   <button id="go">Click me</button>
  </div>
 </div>
@@ -575,9 +595,15 @@ function refill(){bag=LINES.slice();
 refill();
 
 const FADE_IN=5000, HOLD=10000, FADE_OUT=5000;
-let opener=true;
+let opener=true, wordsOn=true;
 function cycle(){
-  if(opener){ gt.textContent="touch to interact, or don't"; opener=false; }
+  if(opener){
+    // The only time anything explains the corner buttons in-canvas. Kept as the
+    // opener rather than a separate message so it is seen once and never again.
+    gt.innerHTML="touch to interact, or don&rsquo;t"
+      +"<i>tap below to mute tones, or to stop words appearing on screen</i>";
+    opener=false;
+  }
   else { if(li>=bag.length) refill(); gt.textContent=bag[li++]; }
   requestAnimationFrame(()=>requestAnimationFrame(()=>gt.classList.add('on')));
   setTimeout(()=>{
@@ -1023,14 +1049,29 @@ const Bath=(function(){
   return { start:start, toggle:toggle, note:note };
 })();
 
-const muteBtn=document.getElementById('mute'), sndBox=document.getElementById('snd');
+const muteBtn=document.getElementById('mute'), sndBox=document.getElementById('snd'),
+      wordsBtn=document.getElementById('words'), glyphBox=document.getElementById('glyph');
+
+function flashControls(){
+  sndBox.classList.add('live'); clearTimeout(window.__sv);
+  window.__sv=setTimeout(function(){sndBox.classList.remove('live');},2200);
+}
+
+wordsBtn.onclick=function(){
+  wordsOn=!wordsOn;
+  wordsBtn.classList.toggle('off',!wordsOn);
+  wordsBtn.setAttribute('aria-pressed',String(!wordsOn));
+  wordsBtn.setAttribute('aria-label',wordsOn?'Hide words':'Show words');
+  glyphBox.classList.toggle('hushed',!wordsOn);
+  if(!wordsOn) gt.classList.remove('on');
+  flashControls();
+};
 muteBtn.onclick=()=>{
   const m=Bath.toggle();
   muteBtn.classList.toggle('off',m);
   muteBtn.setAttribute('aria-pressed',String(m));
   muteBtn.setAttribute('aria-label',m?'Unmute':'Mute');
-  sndBox.classList.add('live'); clearTimeout(window.__sv);
-  window.__sv=setTimeout(()=>sndBox.classList.remove('live'),2200);
+  flashControls();
 };
 
 document.getElementById('go').onclick=()=>{

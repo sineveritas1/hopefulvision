@@ -158,6 +158,14 @@ in the safe set.
 **Timbre** is the original struck singing bowl: inharmonic partials over a long
 decay, each doubled and detuned. Ten oscillators per note.
 
+**Two corner buttons, not one.** The bell mutes the tones; the one beside it
+stops the aphorisms by adding `hushed` to `#glyph`, which hides the overlay
+outright — the cycle keeps running and painting nothing, so switching the words
+back on resumes at the next aphorism rather than mid-fade. Both are announced
+twice: the gate says they exist (they are behind it at that point, so it has to
+describe rather than point), and the opener aphorism names them once in-canvas.
+The opener is the only message that ever explains anything; keep it that way.
+
 **The rate limit is load-bearing.** Ten fingers land as ten `pointerdown` events
 in one frame, and each note rings for seconds. `GAP` and `MAXACTIVE` are what
 stop a drum-roll of taps from burying the audio thread. Muting returns before
