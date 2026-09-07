@@ -244,9 +244,38 @@ in one frame, and each note rings for seconds. `GAP` and `MAXACTIVE` are what
 stop a drum-roll of taps from burying the audio thread. Muting returns before
 scheduling anything, so a muted page schedules nothing at all — measured.
 
+**iOS mutes Web Audio with the ring switch unless a media element is playing.**
+Web Audio alone lands in the "ambient" audio session, which the hardware silent
+switch silences — an iPhone with the ringer off hears nothing at all. A playing
+`HTMLMediaElement` moves the session to "playback", which ignores that switch,
+so `holdSession()` keeps a silent looping clip running. The clip is generated as
+a WAV data URI rather than fetched, since the page has no dependencies and every
+response is `no-store` anyway; it is checked to decode as 0.05s at peak
+amplitude 0. Do not remove it because "nothing plays it" — that is the point.
+`note()` also re-resumes the context on every strike, and a `visibilitychange`
+handler resumes it on return, since iOS suspends it behind a lock screen.
+
 Output is fixed at `LEVEL`; the device's volume is the volume and the corner
 bell is only a mute. Mute must close **both** `master` and `wet` — the reverb
 send bypasses master, so closing one leaves the tail ringing.
+
+## Diagnosing a slow device
+
+Three query flags exist so a device that stutters can be tested on the device
+rather than guessed at from here. They are dormant otherwise and add nothing to
+a normal visit.
+
+- `?debug` — a live readout: GPU string, render scale, canvas size, particle
+  count, fps, worst frame in the last second, the `q` guard, live pointers.
+- `?dpr=1.2` — cap the render scale below the 1.75 default. This is the fill
+  rate knob.
+- `?n=256` — fewer particles; the simulation texture is n x n.
+
+**The point of having both knobs is that they separate the two causes.** If
+`?dpr=` low makes a stutter vanish, the device is fill-rate bound and the answer
+is render scale. If only `?n=` helps, it is the particle count and vertex work.
+Turning a knob at random and shipping the result teaches nothing; get the
+distinction first, then set the default.
 
 ## Local development
 

@@ -174,7 +174,19 @@ if(!gl){
   if(rb) rb.onclick=function(){ location.reload(); };
 }
 
-const SIDE = Math.min(innerWidth,innerHeight) < 500 ? 384 : 512;
+/* Diagnostics, dormant unless asked for. The two knobs below are what actually
+   decide fill cost, so a device that stutters can be tested against different
+   values on the device itself instead of guessing at a throttle and redeploying:
+     ?debug     live readout of GPU, resolution, particle count, fps, worst frame
+     ?dpr=1.2   cap the render scale lower than the default 1.75
+     ?n=320     fewer particles (the simulation texture is n x n)
+   If ?dpr= makes a stutter disappear the cost is fill rate; if only ?n= helps it
+   is the particle count. That distinction decides which knob to turn for real. */
+const QS=new URLSearchParams(location.search);
+function qnum(k,d,lo,hi){ const v=parseFloat(QS.get(k));
+  return isFinite(v)&&v>0?Math.max(lo,Math.min(hi,v)):d; }
+
+const SIDE = Math.round(qnum('n', Math.min(innerWidth,innerHeight)<500?384:512, 64, 1024));
 const N = SIDE*SIDE;
 
 const QUAD=`#version 300 es
@@ -392,6 +404,9 @@ function prog(vs,fs){const p=gl.createProgram();
   gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(p));return p;}
 
 gl.getExtension('EXT_color_buffer_float');
+const GPU=(function(){ try{ const e=gl.getExtension('WEBGL_debug_renderer_info');
+  return e?String(gl.getParameter(e.UNMASKED_RENDERER_WEBGL)).slice(0,40):'unknown';
+}catch(_){ return 'unknown'; } })();
 const pSim=prog(QUAD,SIM), pPart=prog(PVS,PFS), pRing=prog(RVS,RFS),
       pFade=prog(QUAD,FADE), pPost=prog(QUAD,POST);
 
@@ -423,7 +438,7 @@ function colorTex(w,h){
   return [t,f];
 }
 
-let AR=1,W,H; const DPR=Math.min(devicePixelRatio||1,1.75);
+let AR=1,W,H; const DPR=Math.min(devicePixelRatio||1, qnum('dpr',1.75,0.4,3));
 const iP=new Float32Array(N*4), iV=new Float32Array(N*4);
 let posT=[],velT=[],simF=[],pcur=0, acc=[],accF=[],accCur=0;
 
@@ -635,6 +650,16 @@ const uR=U(pRing,['uPtr','uSd','uAspect','uPxScale','uT','uTv']);
 const uF=U(pFade,['uSrc','uRes','uK']);
 const uO=U(pPost,['uSrc','uRes','uT']);
 
+let dbgEl=null,dbgN=0,dbgWorst=0,dbgAt=0;
+if(QS.has('debug')){
+  dbgEl=document.createElement('div');
+  dbgEl.style.cssText='position:fixed;left:8px;top:calc(8px + env(safe-area-inset-top));'
+    +'z-index:9;font:11px/1.5 ui-monospace,Menlo,monospace;color:#9f9;'
+    +'background:rgba(0,0,0,.66);padding:7px 9px;white-space:pre;pointer-events:none;'
+    +'border:1px solid rgba(150,255,150,.28)';
+  document.body.appendChild(dbgEl);
+}
+
 const PTRXYP=new Float32Array(30), PTRSEED=new Float32Array(10);
 let t0=performance.now(),last=t0,running=false;
 
@@ -743,6 +768,19 @@ function frame(now){
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,acc[accCur]);
   gl.uniform1i(uO.uSrc,0); gl.uniform2f(uO.uRes,W,H); gl.uniform1f(uO.uT,t);
   gl.drawArrays(gl.TRIANGLES,0,3);
+
+  if(dbgEl){
+    dbgN++; if(ms>dbgWorst) dbgWorst=ms;
+    if(now-dbgAt>1000){
+      dbgEl.textContent=
+        GPU+'\n'+
+        'dpr '+DPR.toFixed(2)+'  canvas '+W+'x'+H+'\n'+
+        'particles '+SIDE+'x'+SIDE+' = '+N+'\n'+
+        'fps '+Math.round(dbgN*1000/(now-dbgAt))+'   worst '+dbgWorst.toFixed(0)+'ms\n'+
+        'quality q '+q.toFixed(2)+'   pointers '+ptrs.size;
+      dbgN=0; dbgWorst=0; dbgAt=now;
+    }
+  }
 
   requestAnimationFrame(frame);
 }
@@ -1097,7 +1135,34 @@ const Bath=(function(){
   // the volume, and the corner bell is only a mute.
   const LEVEL=0.5, WET=0.46;
 
-  let ctx,master,comp,verb,wet,started=false,muted=false;
+  let ctx,master,comp,verb,wet,started=false,muted=false,keeper=null;
+
+  /* iOS runs Web Audio through the "ambient" audio session, which the hardware
+     silent switch mutes — so on an iPhone with the ringer off the bowls play
+     into nothing. A playing HTMLMediaElement moves the session to "playback",
+     which ignores that switch, so a silent clip is kept looping alongside.
+     The clip is built here rather than fetched: the page has no dependencies,
+     and every response is no-store so a fetched file would re-download anyway. */
+  function silentWav(){
+    const sr=8000, n=Math.floor(sr*0.05), buf=new ArrayBuffer(44+n*2), v=new DataView(buf);
+    const w=(o,str)=>{ for(let i=0;i<str.length;i++) v.setUint8(o+i,str.charCodeAt(i)); };
+    w(0,'RIFF');  v.setUint32(4,36+n*2,true);  w(8,'WAVE');  w(12,'fmt ');
+    v.setUint32(16,16,true); v.setUint16(20,1,true);  v.setUint16(22,1,true);
+    v.setUint32(24,sr,true); v.setUint32(28,sr*2,true);
+    v.setUint16(32,2,true);  v.setUint16(34,16,true); w(36,'data');
+    v.setUint32(40,n*2,true);
+    let out=''; const u=new Uint8Array(buf);
+    for(let i=0;i<u.length;i++) out+=String.fromCharCode(u[i]);
+    return 'data:audio/wav;base64,'+btoa(out);
+  }
+  function holdSession(){
+    if(keeper) return;
+    try{
+      keeper=new Audio(silentWav());
+      keeper.loop=true; keeper.setAttribute('playsinline','');
+      const pr=keeper.play(); if(pr&&pr.catch) pr.catch(function(){});
+    }catch(e){ keeper=null; }
+  }
 
   function impulse(sec,decay){
     const n=Math.floor(ctx.sampleRate*sec), b=ctx.createBuffer(2,n,ctx.sampleRate);
@@ -1168,6 +1233,7 @@ const Bath=(function(){
 
   function note(nx,ny){
     if(!ctx||muted) return;
+    if(ctx.state!=='running'&&ctx.resume) ctx.resume();
     const now=performance.now();
     if(now-lastAt<GAP||active>=MAXACTIVE) return;
     lastAt=now; active++; setTimeout(function(){active--;},8600);
@@ -1192,6 +1258,12 @@ const Bath=(function(){
     try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }
     catch(e){ started=false; return; }
     if(ctx.state==='suspended'&&ctx.resume) ctx.resume();
+    holdSession();
+    // Coming back from another app or a locked screen leaves the context
+    // suspended on iOS, and nothing restarts it on its own.
+    document.addEventListener('visibilitychange',function(){
+      if(!document.hidden&&ctx&&ctx.state!=='running'&&ctx.resume) ctx.resume();
+    });
     master=ctx.createGain(); master.gain.value=LEVEL;
     comp=ctx.createDynamicsCompressor();
     comp.threshold.value=-16; comp.ratio.value=4; comp.attack.value=.02; comp.release.value=.5;
