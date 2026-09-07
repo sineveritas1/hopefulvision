@@ -1046,7 +1046,9 @@ void main(){
   ['pointerup','pointercancel','pointerleave'].forEach(k=>
     surf.addEventListener(k,e=>{
       if(e&&e.pointerId!=null) lptr.delete(e.pointerId);
-      if(lptr.size===2) pinchStart(); else pinchBase=null;
+      // Dropping below two fingers ends the pinch and releases the zoom back to
+      // rest. It is only held while the gesture is actually being made.
+      if(lptr.size===2) pinchStart(); else { pinchBase=null; zoomT=1; }
       if(lptr.size===0) held=false;
     }));
 
@@ -1102,7 +1104,9 @@ void main(){
     py   += (ty-py)           * (1-Math.exp(-dt*13));
 
     phase += dt*(1.0+0.55*on);
-    zoom += (zoomT-zoom)*(1-Math.exp(-dt*11));   // eased, so a pinch glides
+    // Tracks the fingers briskly while pinching, then settles back more gently
+    // once they lift, so the return reads as a spring rather than a snap.
+    zoom += (zoomT-zoom)*(1-Math.exp(-dt*(pinchBase?11:4.5)));
     project(phase,zoom);
 
     lg.viewport(0,0,lc.width,lc.height);

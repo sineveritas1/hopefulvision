@@ -151,15 +151,26 @@ to break:
 **The logo loop stops when the gate is dismissed.** It used to keep shading a
 hidden full-screen canvas underneath the main simulation for the entire session.
 
-**Two fingers pinch it larger or smaller.** Every live pointer on `#logo` is
-tracked in `lptr` so the gesture can be told apart from a one-finger drag; zoom
-is measured against the finger spread at the moment the second finger landed, so
-it tracks the hand instead of jumping, and it persists after release the way
-pinch-zoom does everywhere else. While two fingers are down the warp point is
-left alone, or the figure would also lurch toward whichever finger moved last.
-`touch-action:none` on `#logo` is what stops the browser's own pinch competing.
-Zoomed past about 1.7 the figure runs off the canvas edge — that is intended, it
-reads as looking into the lattice, and the edges are alpha so there is no box.
+**Two fingers pinch it larger or smaller, and it springs back on release.**
+Every live pointer is tracked in `lptr` so the gesture can be told apart from a
+one-finger drag; zoom is measured against the finger spread at the moment the
+second finger landed, so it tracks the hand instead of jumping. Dropping below
+two fingers clears `pinchBase` and sets `zoomT` to 1 — the zoom is only held
+while the gesture is actually being made. The easing rate differs by direction
+on purpose: brisk (11) while following fingers, gentler (4.5) on the way home,
+so the return reads as a spring settling rather than a snap. It is `dt` based,
+so it takes about 0.7s at 60fps regardless of frame rate. Measured through a
+probe build: 1 -> 2.07 pinched out -> back to 1.03, and 0.60 pinched in -> back
+to 0.996.
+
+While two fingers are down the warp point is left alone, or the figure would
+also lurch toward whichever finger moved last. `touch-action:none` is what stops
+the browser's own pinch competing. Zoomed past about 1.7 the figure runs off the
+screen edge — intended, it reads as looking into the lattice.
+
+Note when testing this: the rendered figure's width is **not** a proxy for zoom.
+It changes constantly as the form rotates and breathes, so a width measurement
+will report a return to rest as a failure. Probe the `zoom` variable instead.
 
 **The halo is tuned against the segment count.** `m` is the MINIMUM distance to
 any segment, so doubling the segments shrinks `m` across a much wider area and
