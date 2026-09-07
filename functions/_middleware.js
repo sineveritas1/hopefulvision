@@ -2,8 +2,9 @@
  * Canonical-host redirect.
  *
  * Several hostnames are attached to this Pages project, including retired ones
- * kept alive so old links still work, and they all serve identical content. Left alone that splits search ranking signals across addresses and
- * gives the site no single canonical home.
+ * kept alive so old links still work, and they all serve identical content.
+ * Left alone that splits search ranking signals across addresses and gives the
+ * site no single canonical home.
  *
  * Rather than one rule per domain, anything that is not the canonical host is
  * sent there. Adding another domain later needs no change here.

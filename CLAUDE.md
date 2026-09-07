@@ -335,7 +335,9 @@ their own preview URL.
 
 There is no deploy script to run and no secret to hold. If a deploy needs to be
 inspected, it is in the Cloudflare dashboard under Workers & Pages, under the
-Pages project (still named `trippingtoy` — see wrangler.toml) → Deployments.
+Pages project → Deployments. That project's name in the dashboard is whatever
+`name` says in wrangler.toml — it is not the domain, and the comment above that
+line explains why it cannot be changed.
 
 ## Caching
 
