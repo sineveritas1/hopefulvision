@@ -130,9 +130,28 @@ lateral lobe that lets the form pass through itself instead of staying a
 well-behaved solid (the Klein part). The dodecahedron counter-rotates and
 breathes against the tesseract (`2-br`) so the two shear past each other. The
 projection was replayed over 600s of animation: coordinates stay within
-0.099-0.877, so it never clips the canvas. It is independent of the main sim; the
-`Click me` button creates the audio context (browsers require a gesture) and
-starts the main loop.
+0.099-0.877 at rest, so it never clips the canvas unless pinched.
+
+**Two fingers pinch it larger or smaller.** Every live pointer on `#logo` is
+tracked in `lptr` so the gesture can be told apart from a one-finger drag; zoom
+is measured against the finger spread at the moment the second finger landed, so
+it tracks the hand instead of jumping, and it persists after release the way
+pinch-zoom does everywhere else. While two fingers are down the warp point is
+left alone, or the figure would also lurch toward whichever finger moved last.
+`touch-action:none` on `#logo` is what stops the browser's own pinch competing.
+Zoomed past about 1.7 the figure runs off the canvas edge — that is intended, it
+reads as looking into the lattice, and the edges are alpha so there is no box.
+
+**The halo is tuned against the segment count.** `m` is the MINIMUM distance to
+any segment, so doubling the segments shrinks `m` across a much wider area and
+the halo spreads with it — after adding the dodecahedron the old `exp(-m*26.0)`
+at weight 0.62 washed the background back to grey. It is now `exp(-m*42.0)` at
+0.46 with the discard threshold raised to 0.012, which cut washed pixels from
+17.2% of the canvas to 9% and mean luminance from 21.5 to 16.3. **If the segment
+count changes again, this needs retuning in the same direction.**
+
+It is independent of the main sim; the `Click me` button creates the audio
+context (browsers require a gesture) and starts the main loop.
 
 Two things about the gate are easy to break:
 

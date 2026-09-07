@@ -814,9 +814,15 @@ void main(){
   }
 
   float core=1.0-smoothstep(0.0,0.0062,m);   // thinner: 62 lines, not 32
-  float halo=exp(-m*26.0);
-  float mask=clamp(core+halo*0.62,0.0,1.0);
-  if(mask<0.006) discard;
+  /* m is the MINIMUM distance to any segment, so doubling the segment count
+     shrank m across a much wider area and this halo spread with it, washing the
+     background back to grey. Tightened from 26 to 42 and from 0.62 to 0.46 so
+     the glow hugs the lines instead of filling the space between them, and the
+     discard threshold is raised so the faint outer wash drops out entirely and
+     leaves real transparency, which is what keeps the page black. */
+  float halo=exp(-m*42.0);
+  float mask=clamp(core+halo*0.46,0.0,1.0);
+  if(mask<0.012) discard;
 
   float band=fbm(wuv*2.3+vec2(t*1.7,-t*1.1))+push*0.6+uHeat*0.4+m*3.4;
   vec3 col =spectral(band2w(band*0.95+uT*0.021));
@@ -895,7 +901,7 @@ void main(){
     return [0.5+(X+kl)*k3*sc, 0.5+Y*k3*sc];
   }
 
-  function project(t){
+  function project(t,zm){
     const br=1+0.16*Math.sin(t*0.31)+0.05*Math.sin(t*0.77+1.1);
     const tw=0.42+0.55*Math.sin(t*0.19);
     let e=0;
@@ -905,7 +911,7 @@ void main(){
       const p=V4[n].slice();
       turn(p,0,3,t*0.31); turn(p,1,2,t*0.24); turn(p,0,1,t*0.13); turn(p,2,3,t*0.19);
       const k4=1.9/(2.9-p[3]);
-      P4.push(warp(p[0]*k4,p[1]*k4,p[2]*k4,br,tw,t,0.27));
+      P4.push(warp(p[0]*k4,p[1]*k4,p[2]*k4,br,tw,t,0.27*zm));
     }
     for(let i=0;i<E4.length&&e<SEGN;i++,e++){
       const A=P4[E4[i][0]], B=P4[E4[i][1]];
@@ -919,7 +925,7 @@ void main(){
       for(let n=0;n<V3.length;n++){
         const p=V3[n].slice();
         turn(p,0,2,-t*0.22); turn(p,1,2,t*0.17); turn(p,0,1,-t*0.11);
-        P3.push(warp(p[0]*1.30,p[1]*1.30,p[2]*1.30,2-br,-tw,t,0.27));
+        P3.push(warp(p[0]*1.30,p[1]*1.30,p[2]*1.30,2-br,-tw,t,0.27*zm));
       }
       for(let i=0;i<E3.length&&e<SEGN;i++,e++){
         const A=P3[E3[i][0]], B=P3[E3[i][1]];
@@ -938,15 +944,45 @@ void main(){
     tx=(e.clientX-rc.left)/rc.width;
     ty=1.0-(e.clientY-rc.top)/rc.height;
   }
+
+  /* Two fingers pinch the figure bigger or smaller. Every live pointer is
+     tracked so the gesture can be told apart from a one-finger drag, and the
+     zoom is measured against the finger spread at the moment the second finger
+     landed, so it tracks the hand rather than jumping. It persists after
+     release, the way pinch-zoom does everywhere else.
+     #logo carries touch-action:none, so the browser's own pinch never competes. */
+  const lptr=new Map();
+  let zoom=1, zoomT=1, pinchBase=null;
+  function spread(){
+    const a=Array.from(lptr.values());
+    return a.length<2?0:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+  }
+  function pinchStart(){ const d=spread(); if(d>8) pinchBase={d:d,z:zoomT}; }
+
   lc.addEventListener('pointerdown',e=>{
+    lptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
     held=true; at(e);
     try{ lc.setPointerCapture(e.pointerId); }catch(_){}
+    if(lptr.size===2) pinchStart();
   });
   // Hover used to shove `on` up with Math.max every move, which fought the
   // easing and jittered. A decaying deadline lets it ease both ways instead.
-  lc.addEventListener('pointermove',e=>{ at(e); if(!held) hoverUntil=performance.now()+420; });
+  lc.addEventListener('pointermove',e=>{
+    if(lptr.has(e.pointerId)) lptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(lptr.size>=2){
+      // Pinching: drive zoom, and leave the warp point where it was so the
+      // figure does not also lurch toward whichever finger moved last.
+      if(pinchBase) zoomT=Math.max(0.6,Math.min(2.2,pinchBase.z*spread()/pinchBase.d));
+      return;
+    }
+    at(e); if(!held) hoverUntil=performance.now()+420;
+  });
   ['pointerup','pointercancel','lostpointercapture'].forEach(k=>
-    lc.addEventListener(k,()=>held=false));
+    lc.addEventListener(k,e=>{
+      if(e&&e.pointerId!=null) lptr.delete(e.pointerId);
+      if(lptr.size===2) pinchStart(); else pinchBase=null;
+      if(lptr.size===0) held=false;
+    }));
 
   // Match the backing store to the element's real pixel size. The logo is much
   // larger now, and a fixed 560px canvas upscaled on a 3x phone screen is soft.
@@ -991,7 +1027,8 @@ void main(){
     py   += (ty-py)           * (1-Math.exp(-dt*13));
 
     phase += dt*(1.0+0.55*on);
-    project(phase);
+    zoom += (zoomT-zoom)*(1-Math.exp(-dt*11));   // eased, so a pinch glides
+    project(phase,zoom);
 
     lg.viewport(0,0,lc.width,lc.height);
     lg.clear(lg.COLOR_BUFFER_BIT);
