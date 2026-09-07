@@ -33,7 +33,7 @@ Everything in the repo is ready. These are the one-time account steps that have
 to happen in a browser, in order.
 
 **1. Create the Pages project** — Cloudflare dashboard → Workers & Pages →
-Create → Pages → Connect to Git → pick `sineveritas1/tripping`.
+Create → Pages → Connect to Git → pick `sineveritas1/hopefulvision`.
 
 Build settings:
 
