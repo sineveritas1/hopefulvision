@@ -335,7 +335,9 @@ their own preview URL.
 
 There is no deploy script to run and no secret to hold. If a deploy needs to be
 inspected, it is in the Cloudflare dashboard under Workers & Pages, under the
-Pages project (still named `trippingtoy` — see wrangler.toml) → Deployments.
+`hopefulvision` project → Deployments. That is `name` in wrangler.toml, and it
+has to stay equal to the project on the account — Pages rejects a deploy whose
+name does not match.
 
 ## Caching
 
