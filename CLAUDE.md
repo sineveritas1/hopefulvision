@@ -335,9 +335,9 @@ their own preview URL.
 
 There is no deploy script to run and no secret to hold. If a deploy needs to be
 inspected, it is in the Cloudflare dashboard under Workers & Pages, under the
-Pages project → Deployments. That project's name in the dashboard is whatever
-`name` says in wrangler.toml — it is not the domain, and the comment above that
-line explains why it cannot be changed.
+`hopefulvision` project → Deployments. That is `name` in wrangler.toml, and it
+has to stay equal to the project on the account — Pages rejects a deploy whose
+name does not match.
 
 ## Caching
 

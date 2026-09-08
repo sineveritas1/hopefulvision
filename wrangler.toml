@@ -9,14 +9,11 @@
 #
 # See CLAUDE.md -> "Growing the backend" for the exact commands.
 
-# THE ONE PLACE THE OLD NAME SURVIVES, and it has to.
-#
-# This is the Cloudflare Pages PROJECT name, not the domain. It must match the
-# project that exists or the build stops matching it. Cloudflare Pages projects
-# cannot be renamed — moving off this name means creating a new project and
-# re-pointing every custom domain at it, which is not worth doing to hide a
-# string that only ever appears in the dashboard and in *.pages.dev.
-name = "trippingtoy"
+# The Cloudflare Pages PROJECT name — what the dashboard lists under Workers &
+# Pages, and the label in *.pages.dev. It is not the domain, and it has to match
+# the project that actually exists on the account: Pages reads this file and
+# rejects a deploy whose name points somewhere else.
+name = "hopefulvision"
 compatibility_date = "2025-09-06"
 
 # Everything inside public/ is what actually gets served. Nothing else in this
